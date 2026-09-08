@@ -42,7 +42,7 @@ def translational_template(rho0_z: np.ndarray, z: np.ndarray, *, normalize: bool
         raise ValueError("rho0_z and z must have identical shapes")
     phi = -np.gradient(rho0, zz, edge_order=2)
     if normalize:
-        norm = np.sqrt(np.trapz(np.abs(phi) ** 2, zz))
+        norm = np.sqrt(np.trapezoid(np.abs(phi) ** 2, zz))
         if norm == 0:
             raise ValueError("zero translational template norm")
         phi = phi / norm
@@ -75,7 +75,7 @@ def template_overlaps(eigenvectors: np.ndarray, template: np.ndarray, z: np.ndar
         zz = np.asarray(z, dtype=float)
         if zz.size != phi.size:
             raise ValueError("z dimension differs from template")
-        inner = lambda a, b: np.trapz(np.conj(a) * b, zz)
+        inner = lambda a, b: np.trapezoid(np.conj(a) * b, zz)
 
     pnorm = np.real(inner(phi, phi))
     out = []
@@ -103,8 +103,8 @@ def decompose_mode(rho_q_tz: np.ndarray, template: np.ndarray, z: np.ndarray | N
         h = (x @ np.conj(phi)) / denom
     else:
         zz = np.asarray(z, dtype=float)
-        denom = np.trapz(np.conj(phi) * phi, zz)
-        h = np.array([np.trapz(np.conj(phi) * row, zz) / denom for row in x])
+        denom = np.trapezoid(np.conj(phi) * phi, zz)
+        h = np.array([np.trapezoid(np.conj(phi) * row, zz) / denom for row in x])
 
     parallel = h[:, None] * phi[None, :]
     perp = x - parallel
@@ -120,7 +120,7 @@ def projected_observable(rho_tz: np.ndarray, form_factor_z: np.ndarray, z: np.nd
     if z is None:
         return x @ np.conj(f)
     zz = np.asarray(z, dtype=float)
-    return np.array([np.trapz(row * np.conj(f), zz) for row in x])
+    return np.array([np.trapezoid(row * np.conj(f), zz) for row in x])
 
 
 def sector_variances(total_x: np.ndarray, h_x: np.ndarray, perp_x: np.ndarray) -> dict[str, float]:
