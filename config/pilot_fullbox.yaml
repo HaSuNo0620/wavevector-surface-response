@@ -1,0 +1,33 @@
+simulation:
+  seed: 20260909
+  temperature: 1.0
+  box: [16.0, 16.0, 48.0]
+  n_particles: 4800
+  cutoff: 2.5
+  neighbor_skin: 0.5
+  max_displacement: 0.12
+  equilibration_sweeps: 300
+  production_sweeps: 1200
+  sample_every: 10
+  z_bins: 192
+  two_interfaces: true
+
+initialization:
+  mode: slab
+  liquid_density: 0.7876
+  # N/(rho_L Lx Ly Lz) ~ 0.496; 0.52 leaves room for a finite vapor density.
+  liquid_fraction_z: 0.52
+  min_separation: 0.85
+
+wavevectors:
+  # q_x = 2*pi*n_x/Lx.  Include low-q Goldstone sector and q~q* packing sector.
+  n_x: [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+
+analysis:
+  n_eigenmodes: 16
+  bootstrap_blocks: 12
+
+notes:
+  stage: "full-box physics pilot; A=0; q_perp=0"
+  purpose: "test Goldstone-to-packing mode crossover before long production"
+  caveat: "trajectory length is a pilot, not a publication-quality convergence claim"
