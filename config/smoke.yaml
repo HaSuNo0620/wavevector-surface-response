@@ -1,0 +1,29 @@
+simulation:
+  seed: 7
+  temperature: 1.0
+  beta: 1.0
+  box: [8.0, 8.0, 16.0]
+  n_particles: 256
+  cutoff: 2.5
+  neighbor_skin: 0.5
+  max_displacement: 0.12
+  equilibration_sweeps: 5
+  production_sweeps: 20
+  sample_every: 2
+  z_bins: 32
+  two_interfaces: true
+
+initialization:
+  mode: slab
+  liquid_density: 0.72
+  liquid_fraction_z: 0.62
+  min_separation: 0.85
+
+wavevectors:
+  n_x: [1, 2, 3]
+
+analysis:
+  n_eigenmodes: 6
+
+notes:
+  stage: "CI smoke test only; not physical production data"
