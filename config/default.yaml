@@ -1,0 +1,33 @@
+simulation:
+  seed: 20260909
+  temperature: 1.0
+  beta: 1.0
+  box: [16.0, 16.0, 48.0]
+  n_particles: 4800
+  cutoff: 2.5
+  max_displacement: 0.12
+  equilibration_sweeps: 2000
+  production_sweeps: 10000
+  sample_every: 10
+  z_bins: 192
+  two_interfaces: true
+
+initialization:
+  mode: slab
+  liquid_density: 0.7876
+  liquid_fraction_z: 0.34
+  min_separation: 0.85
+
+wavevectors:
+  # q_perp = 0 in stage 1. Each integer n_x gives q=2*pi*n_x/Lx.
+  n_x: [4, 6, 8, 10, 12, 14, 16, 18, 20]
+
+analysis:
+  derivative_smoothing_bins: 3
+  n_eigenmodes: 12
+  bulk_exclusion_fraction: 0.22
+  bootstrap_blocks: 20
+
+notes:
+  stage: "q_perp=0 Goldstone-to-packing diagnostic"
+  warning: "These numerical defaults are a reproducible starting point; production parameters must be matched to the validated one-component model before final runs."
