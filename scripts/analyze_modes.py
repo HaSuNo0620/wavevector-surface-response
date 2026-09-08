@@ -9,32 +9,42 @@ import numpy as np
 from wvsr.analysis import (
     covariance_kernel,
     translational_template,
+    two_interface_templates,
     diagonalize_covariance,
     template_overlaps,
-    decompose_mode,
+    subspace_overlaps,
+    decompose_subspace,
     sector_variances,
 )
 
 
 def analyze_one_q(z: np.ndarray, rho0: np.ndarray, rho: np.ndarray, n_modes: int) -> dict:
     cov = covariance_kernel(rho)
-    phi = translational_template(rho0, z)
+    phi_global = translational_template(rho0, z)
+    phi_interfaces, centers = two_interface_templates(rho0, z)
     eigvals, eigvecs = diagonalize_covariance(cov, n_modes)
-    overlaps = template_overlaps(eigvecs, phi, z)
 
-    dec = decompose_mode(rho, phi, z)
+    global_overlaps = template_overlaps(eigvecs, phi_global, z)
+    capillary_overlaps = subspace_overlaps(eigvecs, phi_interfaces, z)
+
+    dec = decompose_subspace(rho, phi_interfaces, z)
     dz = float(np.mean(np.diff(z)))
-    total = (rho - rho.mean(axis=0, keepdims=True)).sum(axis=1) * dz
-    h_obs = dec.rho_parallel.sum(axis=1) * dz
-    p_obs = dec.rho_perp.sum(axis=1) * dz
-    sectors = sector_variances(total, h_obs, p_obs)
+    centered = rho - rho.mean(axis=0, keepdims=True)
+    total = centered.sum(axis=1) * dz
+    cap_obs = dec.rho_parallel.sum(axis=1) * dz
+    pack_obs = dec.rho_perp.sum(axis=1) * dz
+    sectors = sector_variances(total, cap_obs, pack_obs)
+
     return {
         "covariance": cov,
-        "template": phi,
+        "global_template": phi_global,
+        "interface_templates": phi_interfaces,
+        "interface_centers": centers,
         "eigenvalues": eigvals,
         "eigenvectors": eigvecs,
-        "overlaps": overlaps,
-        "h_t": dec.h,
+        "global_overlaps": global_overlaps,
+        "capillary_overlaps": capillary_overlaps,
+        "capillary_coefficients_t2": dec.coefficients,
         "sectors": sectors,
     }
 
@@ -60,27 +70,38 @@ def main() -> None:
         rho = rho_all[:, iq, :]
         out = analyze_one_q(z, rho0, rho, args.n_modes)
         sectors = out["sectors"]
-        dominant = int(np.argmax(out["overlaps"]))
+        dominant = int(np.argmax(out["capillary_overlaps"]))
+        second_order = np.argsort(out["capillary_overlaps"])[::-1]
+        second = int(second_order[1]) if len(second_order) > 1 else dominant
         np.savez_compressed(
             args.output_dir / f"q_{iq:03d}.npz",
             qx=q,
             z=z,
             rho0=rho0,
-            template=out["template"],
+            global_template=out["global_template"],
+            interface_templates=out["interface_templates"],
+            interface_centers=out["interface_centers"],
             covariance=out["covariance"],
             eigenvalues=out["eigenvalues"],
             eigenvectors=out["eigenvectors"],
-            overlap_rho_prime=out["overlaps"],
-            h_t=out["h_t"],
+            overlap_global_translation=out["global_overlaps"],
+            overlap_capillary_subspace=out["capillary_overlaps"],
+            capillary_coefficients_t2=out["capillary_coefficients_t2"],
             **sectors,
         )
         rows.append({
             "iq": iq,
             "qx": float(q),
-            "dominant_goldstone_mode": dominant,
-            "goldstone_overlap": float(out["overlaps"][dominant]),
-            "goldstone_eigenvalue": float(out["eigenvalues"][dominant]),
+            "dominant_capillary_mode": dominant,
+            "capillary_overlap": float(out["capillary_overlaps"][dominant]),
+            "capillary_eigenvalue": float(out["eigenvalues"][dominant]),
+            "second_capillary_mode": second,
+            "second_capillary_overlap": float(out["capillary_overlaps"][second]),
+            "second_capillary_eigenvalue": float(out["eigenvalues"][second]),
+            "global_translation_overlap_of_dominant": float(out["global_overlaps"][dominant]),
             "largest_eigenvalue": float(out["eigenvalues"][0]),
+            "interface_z_1": float(out["interface_centers"][0]),
+            "interface_z_2": float(out["interface_centers"][1]),
             **sectors,
         })
 
@@ -93,8 +114,8 @@ def main() -> None:
     print(f"saved: {csv_path}")
     for row in rows:
         print(
-            f"q={row['qx']:.6f} overlap={row['goldstone_overlap']:.4f} "
-            f"lambda_G={row['goldstone_eigenvalue']:.6g} closure={row['closure_error']:.3e}"
+            f"q={row['qx']:.6f} cap_overlap={row['capillary_overlap']:.4f} "
+            f"lambda_cap={row['capillary_eigenvalue']:.6g} closure={row['closure_error']:.3e}"
         )
 
 
