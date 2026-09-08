@@ -43,8 +43,11 @@ jobs:
           rows = list(csv.DictReader(p.open()))
           assert len(rows) == 12, len(rows)
           for r in rows:
-              for key in ['qx','goldstone_overlap','goldstone_eigenvalue','var_total','closure_error']:
+              for key in ['qx','capillary_overlap','capillary_eigenvalue','second_capillary_overlap','var_total','closure_error','interface_z_1','interface_z_2']:
                   assert math.isfinite(float(r[key])), (key, r[key])
+              assert 0.0 <= float(r['capillary_overlap']) <= 1.0
+              assert 0.0 <= float(r['second_capillary_overlap']) <= 1.0
+              assert float(r['interface_z_1']) < float(r['interface_z_2'])
               assert abs(float(r['closure_error'])) < 1e-8 * max(1.0, abs(float(r['var_total'])))
           print('pilot output validation passed')
           PY
