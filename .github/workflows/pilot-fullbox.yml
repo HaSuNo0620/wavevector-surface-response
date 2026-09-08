@@ -26,7 +26,7 @@ jobs:
           pip install -e .
       - name: Run full-box A=0 pilot
         run: |
-          python scripts/run_mc.py config/pilot_fullbox.yaml --output results/raw/pilot_fullbox.npz
+          python scripts/run_mc.py --config config/pilot_fullbox.yaml --output results/raw/pilot_fullbox.npz
       - name: Analyze all q modes
         run: |
           python scripts/analyze_modes.py results/raw/pilot_fullbox.npz --output-dir results/processed/pilot_modes --n-modes 16
