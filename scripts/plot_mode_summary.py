@@ -13,9 +13,8 @@ def read_summary(path: Path) -> dict[str, np.ndarray]:
         rows = list(csv.DictReader(f))
     if not rows:
         raise ValueError("empty summary CSV")
-    keys = rows[0].keys()
     out: dict[str, np.ndarray] = {}
-    for key in keys:
+    for key in rows[0].keys():
         try:
             out[key] = np.asarray([float(r[key]) for r in rows], dtype=float)
         except ValueError:
@@ -30,11 +29,12 @@ def main() -> None:
     args = p.parse_args()
 
     d = read_summary(args.summary)
-    q = d["qx"]
-    order = np.argsort(q)
-    q = q[order]
-    overlap = d["goldstone_overlap"][order]
-    lam = d["goldstone_eigenvalue"][order]
+    order = np.argsort(d["qx"])
+    q = d["qx"][order]
+    overlap = d["capillary_overlap"][order]
+    overlap2 = d["second_capillary_overlap"][order]
+    lam = d["capillary_eigenvalue"][order]
+    lam2 = d["second_capillary_eigenvalue"][order]
     total = d["var_total"][order]
     hh = d["var_hh"][order]
     cross2 = 2.0 * d["cross_h_perp"][order]
@@ -43,37 +43,42 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots()
-    ax.plot(q, overlap, marker="o")
+    ax.plot(q, overlap, marker="o", label="1st capillary-like mode")
+    ax.plot(q, overlap2, marker="s", label="2nd capillary-like mode")
     ax.set_xlabel(r"$q_\parallel$")
-    ax.set_ylabel(r"Goldstone overlap $O_G$")
+    ax.set_ylabel("overlap with two-interface capillary subspace")
     ax.set_ylim(-0.02, 1.02)
+    ax.legend()
     fig.tight_layout()
-    fig.savefig(args.output_dir / "goldstone_overlap_vs_q.png", dpi=180)
+    fig.savefig(args.output_dir / "capillary_overlap_vs_q.png", dpi=180)
     plt.close(fig)
 
     fig, ax = plt.subplots()
-    ax.plot(q, lam, marker="o", label=r"$\lambda_G$")
+    ax.plot(q, lam, marker="o", label="1st")
+    ax.plot(q, lam2, marker="s", label="2nd")
     ax.set_xlabel(r"$q_\parallel$")
-    ax.set_ylabel(r"Goldstone eigenvalue $\lambda_G$")
+    ax.set_ylabel("capillary-like covariance eigenvalue")
     ax.set_yscale("log")
+    ax.legend()
     fig.tight_layout()
-    fig.savefig(args.output_dir / "goldstone_eigenvalue_vs_q.png", dpi=180)
+    fig.savefig(args.output_dir / "capillary_eigenvalue_vs_q.png", dpi=180)
     plt.close(fig)
 
     fig, ax = plt.subplots()
-    ax.plot(q, lam * q * q, marker="o")
+    ax.plot(q, lam * q * q, marker="o", label="1st")
+    ax.plot(q, lam2 * q * q, marker="s", label="2nd")
     ax.set_xlabel(r"$q_\parallel$")
-    ax.set_ylabel(r"$q_\parallel^2\lambda_G$")
+    ax.set_ylabel(r"$q_\parallel^2\lambda_{cap}$")
+    ax.legend()
     fig.tight_layout()
-    fig.savefig(args.output_dir / "goldstone_q2lambda_vs_q.png", dpi=180)
+    fig.savefig(args.output_dir / "capillary_q2lambda_vs_q.png", dpi=180)
     plt.close(fig)
 
-    # Sector fractions are diagnostic only when var_total is well away from zero.
     denom = np.where(np.abs(total) > 1e-30, total, np.nan)
     fig, ax = plt.subplots()
-    ax.plot(q, hh / denom, marker="o", label=r"$hh$")
-    ax.plot(q, cross2 / denom, marker="o", label=r"$2h\perp$")
-    ax.plot(q, pp / denom, marker="o", label=r"$\perp\perp$")
+    ax.plot(q, hh / denom, marker="o", label="capillary subspace")
+    ax.plot(q, cross2 / denom, marker="o", label="2 x cross")
+    ax.plot(q, pp / denom, marker="o", label="orthogonal/packing")
     ax.set_xlabel(r"$q_\parallel$")
     ax.set_ylabel("fraction of total projected variance")
     ax.legend()
