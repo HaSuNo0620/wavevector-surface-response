@@ -46,6 +46,8 @@ class VerletNeighbors:
 
     The list contains pairs within cutoff+skin at the last rebuild. It remains
     valid while every particle has moved less than skin/2 since that rebuild.
+    Trial moves that would cross the skin/2 bound must therefore trigger a
+    rebuild *before* old/new local energies are evaluated.
     """
 
     def __init__(self, positions: np.ndarray, box: np.ndarray, cutoff: float, skin: float):
@@ -70,10 +72,12 @@ class VerletNeighbors:
         self.reference = pos.copy()
         self.displacement.fill(0.0)
 
-    def record_move(self, i: int, dr: np.ndarray) -> bool:
+    def trial_requires_rebuild(self, i: int, dr: np.ndarray) -> bool:
+        candidate = self.displacement[i] + np.asarray(dr, dtype=float)
+        return bool(np.linalg.norm(candidate) >= 0.5 * self.skin)
+
+    def record_move(self, i: int, dr: np.ndarray) -> None:
         self.displacement[i] += dr
-        max_disp = np.sqrt(np.max(np.sum(self.displacement * self.displacement, axis=1)))
-        return bool(max_disp >= 0.5 * self.skin)
 
 
 def minimum_image(dr: np.ndarray, box: np.ndarray) -> np.ndarray:
@@ -118,12 +122,7 @@ def initialize_slab(
     min_separation: float,
     rng: np.random.Generator,
 ) -> np.ndarray:
-    """Create a dense central slab on a slightly jittered simple-cubic grid.
-
-    This initializer is deliberately conservative: it avoids severe overlaps,
-    then ordinary NVT MC is used for equilibration. The requested particle
-    number must fit inside the chosen slab volume at the requested spacing.
-    """
+    """Create a dense central slab on a slightly jittered simple-cubic grid."""
     lx, ly, lz = map(float, box)
     slab_thickness = lz * float(liquid_fraction_z)
     target_volume = n_particles / float(liquid_density)
@@ -158,12 +157,7 @@ def initialize_slab(
 
 
 def density_modes(positions: np.ndarray, box: np.ndarray, z_bins: int, qx_values: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return z centers, rho0(z), and rho_q(z) for all supplied qx values.
-
-    rho_q is normalized as a number-density Fourier component per z bin:
-        rho_q(z) = sum_{i in bin} exp(i qx x_i) / (Lx Ly dz)
-    with shape (n_q, n_z).
-    """
+    """Return z centers, rho0(z), and rho_q(z) for all supplied qx values."""
     lx, ly, lz = box
     dz = lz / int(z_bins)
     z = (np.arange(z_bins) + 0.5) * dz
@@ -194,14 +188,15 @@ def run_mc(
     initial_positions: np.ndarray | None = None,
     adapt_displacement: bool = True,
 ) -> dict[str, np.ndarray | float | int | dict]:
-    """Run NVT Metropolis MC and return sampled density modes.
-
-    The production output stores rho_q(z,t), not only integrated observables,
-    so covariance/eigenmode analyses can be redone without rerunning MC.
-    """
+    """Run NVT Metropolis MC and return sampled density modes."""
     rng = np.random.default_rng(cfg.seed)
     box = np.asarray(cfg.box, dtype=float)
     field = field or ExternalField()
+
+    # A one-step trial must itself remain inside skin/2 after any pre-trial rebuild.
+    safe_component_disp = 0.49 * cfg.neighbor_skin / math.sqrt(3.0)
+    max_disp = min(float(cfg.max_displacement), safe_component_disp)
+
     positions = (
         np.array(initial_positions, dtype=float, copy=True)
         if initial_positions is not None
@@ -219,7 +214,6 @@ def run_mc(
         raise ValueError("initial_positions particle count does not match config")
 
     nbrs = VerletNeighbors(positions, box, cfg.cutoff, cfg.neighbor_skin)
-    max_disp = float(cfg.max_displacement)
     accepted = 0
     attempted = 0
     samples_rho0: list[np.ndarray] = []
@@ -234,21 +228,28 @@ def run_mc(
     for sweep in range(total_sweeps):
         order = rng.permutation(cfg.n_particles)
         for i in order:
+            i = int(i)
             old = positions[i].copy()
             proposal_dr = rng.uniform(-max_disp, max_disp, size=3)
             trial = np.mod(old + proposal_dr, box)
-            e_old = local_energy(int(i), old, positions, nbrs, cfg, field)
-            e_new = local_energy(int(i), trial, positions, nbrs, cfg, field)
+            actual_dr = minimum_image(trial - old, box)
+
+            # Critical correctness condition: if this *trial* would make the
+            # cumulative displacement reach skin/2, rebuild at the current
+            # configuration before evaluating both old and new energies.
+            if nbrs.trial_requires_rebuild(i, actual_dr):
+                nbrs.rebuild(positions)
+
+            e_old = local_energy(i, old, positions, nbrs, cfg, field)
+            e_new = local_energy(i, trial, positions, nbrs, cfg, field)
             dE = e_new - e_old
             attempted += 1
             window_attempts += 1
             if dE <= 0.0 or rng.random() < math.exp(-cfg.beta * dE):
-                actual_dr = minimum_image(trial - old, box)
                 positions[i] = trial
                 accepted += 1
                 window_accepts += 1
-                if nbrs.record_move(int(i), actual_dr):
-                    nbrs.rebuild(positions)
+                nbrs.record_move(i, actual_dr)
 
         if adapt_displacement and sweep < cfg.equilibration_sweeps and (sweep + 1) % 100 == 0:
             rate = window_accepts / max(window_attempts, 1)
@@ -256,7 +257,7 @@ def run_mc(
                 max_disp *= 0.90
             elif rate > 0.50:
                 max_disp *= 1.10
-            max_disp = min(max_disp, 0.20 * min(box))
+            max_disp = min(max_disp, safe_component_disp, 0.20 * min(box))
             window_attempts = 0
             window_accepts = 0
 
