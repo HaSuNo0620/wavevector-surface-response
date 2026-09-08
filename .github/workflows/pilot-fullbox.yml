@@ -1,0 +1,59 @@
+name: pilot-fullbox
+
+on:
+  push:
+    paths:
+      - "config/pilot_fullbox.yaml"
+      - "src/wvsr/**"
+      - "scripts/run_mc.py"
+      - "scripts/analyze_modes.py"
+      - "scripts/plot_mode_summary.py"
+      - ".github/workflows/pilot-fullbox.yml"
+  workflow_dispatch:
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Run full-box A=0 pilot
+        run: |
+          python scripts/run_mc.py config/pilot_fullbox.yaml --output results/raw/pilot_fullbox.npz
+      - name: Analyze all q modes
+        run: |
+          python scripts/analyze_modes.py results/raw/pilot_fullbox.npz --output-dir results/processed/pilot_modes --n-modes 16
+      - name: Make diagnostic figures
+        run: |
+          python scripts/plot_mode_summary.py results/processed/pilot_modes/mode_summary.csv --output-dir results/figures/pilot
+      - name: Check finite outputs
+        run: |
+          python - <<'PY'
+          import csv
+          import math
+          from pathlib import Path
+          p = Path('results/processed/pilot_modes/mode_summary.csv')
+          rows = list(csv.DictReader(p.open()))
+          assert len(rows) == 12, len(rows)
+          for r in rows:
+              for key in ['qx','goldstone_overlap','goldstone_eigenvalue','var_total','closure_error']:
+                  assert math.isfinite(float(r[key])), (key, r[key])
+              assert abs(float(r['closure_error'])) < 1e-8 * max(1.0, abs(float(r['var_total'])))
+          print('pilot output validation passed')
+          PY
+      - name: Upload pilot results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pilot-fullbox-results
+          path: |
+            results/raw/pilot_fullbox.npz
+            results/processed/pilot_modes/**
+            results/figures/pilot/**
+          retention-days: 30
