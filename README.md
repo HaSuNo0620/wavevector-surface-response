@@ -1,18 +1,32 @@
 # wavevector-surface-response
 
-空間的に周期的な外場を受ける一成分液体–気体界面について、Monte Carlo 計算から波数分解された界面自由エネルギー応答と密度揺らぎモードを解析するための再現可能な計算パイプラインである。
+空間的に周期的な外場を受ける一成分液体–気体界面について、Monte Carlo 計算から**界面自由エネルギーの波数応答**と、その内部に含まれる界面変位・厚み揺らぎ・microscopic packing の寄与を解析するための再現可能な計算パイプラインである。
 
-本研究で主に扱う応答量は、外場振幅 $A$ に対する界面自由エネルギー密度（表面張力）の二次応答
+## 研究の中心量
+
+外場を
+
+$$
+V_{\mathrm{ext}}(\mathbf r)
+=
+A\cos(\mathbf q\cdot\mathbf r)
+$$
+
+とし、外場振幅 $A$ に対する界面自由エネルギー密度を
 
 $$
 \gamma(A,\mathbf q)
 =
 \gamma_0
 +
-\frac{1}{2}\chi_\gamma(\mathbf q)A^2
+\frac12\chi_\gamma(\mathbf q)A^2
 +
-O(A^4),
+O(A^4)
 $$
+
+と展開する。
+
+ここで
 
 $$
 \chi_\gamma(\mathbf q)
@@ -22,63 +36,174 @@ $$
 \right|_{A=0}
 $$
 
-である。
+を、本研究では **表面張力の波数応答**、より厳密には **wavevector-resolved susceptibility of interfacial free energy** と呼ぶ。
 
-ここではこれを **表面張力の波数応答**、あるいは **wavevector-resolved susceptibility of interfacial free energy** とみなす。
+Hamiltonian を
+
+$$
+H(A)=H_0+A X_{\mathbf q}
+$$
+
+と書けば、平衡統計力学から
+
+$$
+\frac{\partial F}{\partial A}
+=
+\langle X_{\mathbf q}\rangle_A
+$$
+
+および
+
+$$
+\left.
+\frac{\partial^2F}{\partial A^2}
+\right|_{A=0}
+=
+-\beta\operatorname{Var}(X_{\mathbf q})
+$$
+
+が成り立つ。
+
+したがって本研究の主目的は、自由な毛細管波そのものを測ることではなく、**外場に共役な密度応答が波数とともにどのように変化するか**を調べることである。
 
 ## 研究目的
 
-第一段階の目的は、液体–気体界面の密度揺らぎが、長波長では界面変位に対応する Goldstone / capillary モードとして振る舞い、分子スケールでは microscopic packing モードへと混成していく可能性を検証することである。
+中心となる問いは、外場に対する界面自由エネルギー応答が
 
-密度揺らぎを
+$$
+q\ll q_*
+$$
+
+の長波長領域から
+
+$$
+q\sim q_*
+$$
+
+の分子 packing 領域へ移るとき、その内部構造がどのように変化するか、である。
+
+ここで $q_*$ は bulk liquid structure factor $S(q)$ の第一ピーク位置を表す。
+
+密度揺らぎを概念的に
 
 $$
 \delta\rho_q(z)
 =
-h_q\,\phi_G(z)
+\delta\rho_q^{\mathrm{int}}(z)
 +
-\delta\rho_q^{\perp}(z),
+\delta\rho_q^{\mathrm{pack}}(z)
 $$
 
-と分解する。ここで並進 Goldstone モードの基準関数を
+と分ける。前者には界面位置・界面形状・二界面間の collective motion が含まれ、後者にはそれでは説明できない microscopic density fluctuation が含まれる。
+
+外場に共役な観測量については
 
 $$
-\phi_G(z)
-\equiv
--\frac{d\rho_0(z)}{dz}
+X_q
+=
+X_{\mathrm{int}}(q)
++
+X_{\mathrm{pack}}(q)
 $$
 
-と定義する。
+と書き、その分散を
 
-したがって、より具体的には
+$$
+\operatorname{Var}(X_q)
+=
+\operatorname{Var}(X_{\mathrm{int}})
++
+2\operatorname{Cov}(X_{\mathrm{int}},X_{\mathrm{pack}})
++
+\operatorname{Var}(X_{\mathrm{pack}})
+$$
+
+と分解する。
+
+したがって、本研究で主要に見るのは
+
+$$
+\chi_{\mathrm{total}}(q)
+=
+\chi_{\mathrm{int}}(q)
++
+2\chi_{\mathrm{cross}}(q)
++
+\chi_{\mathrm{pack}}(q)
+$$
+
+という **外場応答の sector decomposition** である。
+
+## 毛細管波理論の位置づけ
+
+界面変位が十分長波長で単独自由界面として記述できる場合には
 
 $$
 \delta\rho_q(z)
+\simeq
+-h_q\rho_0'(z)
+$$
+
+と書ける。
+
+さらに標準的な capillary-wave Hamiltonian
+
+$$
+\mathcal H_{\mathrm{CW}}
 =
-h_q\left[-\rho_0'(z)\right]
-+
-\delta\rho_q^{\perp}(z)
+\frac{\gamma A_\parallel}{2}
+\sum_q q^2|h_q|^2
 $$
 
-である。
-
-外場に共役な揺らぎ応答については、全応答を概念的に
+が成立するなら
 
 $$
-\chi_{\mathrm{total}}
+\langle |h_q|^2\rangle
+\propto
+\frac{1}{q^2}
+$$
+
+が期待される。
+
+ただし、**この $q^{-2}$ 則は本研究の合格条件ではない。**
+
+今回の外場は全密度に作用し、界面高さへ直接結合する外場ではない。また周期境界下の液体–気体 slab には二つの界面が存在するため、単一自由界面の capillary-wave 理論がそのまま成立するとは限らない。
+
+したがって $q^{-2}$ 則は、低波数側で界面 sector が単純な Goldstone / capillary 極限へ接続するかを調べる**補助的な漸近診断**として扱う。
+
+## 二界面系の collective coordinate
+
+周期境界下の slab には二つの界面があるため、それぞれの変位を $h_1(q)$、$h_2(q)$ とする。
+
+そこから
+
+$$
+H_q
 =
-\chi_{hh}
-+
-2\chi_{h\perp}
-+
-\chi_{\perp\perp}
+\frac{h_1(q)+h_2(q)}{2}
 $$
 
-と分解し、界面変位セクター、混合セクター、packing セクターの寄与を調べる。
+を slab 全体の**並進モード**、
+
+$$
+W_q
+=
+h_2(q)-h_1(q)
+$$
+
+を slab の**厚み・breathing モード**と定義する。
+
+現在の pilot 計算では、単純な並進 $H_q$ よりも厚み揺らぎ $W_q$ の方が大きく、二界面の collective motion を理解する上で重要であることが示唆されている。
 
 ## 密度相関と固有モード解析
 
-面内波数 $q_\parallel$ に対して密度モード $\rho_q(z,t)$ を計測し、その揺らぎ
+面内波数 $q_\parallel$ ごとに
+
+$$
+\rho_q(z,t)
+$$
+
+を保存し、
 
 $$
 \delta\rho_q(z,t)
@@ -101,7 +226,7 @@ $$
 
 を構成する。
 
-この行列を
+これを
 
 $$
 \int dz'\,
@@ -112,69 +237,48 @@ $$
 
 として固有値分解する。
 
-離散化した数値計算では通常の Hermitian 固有値問題
+この固有モード解析は、外場応答そのものではなく、密度揺らぎがどのような $z$ 方向構造を持つかを理解するための補助解析である。
+
+二界面の局所変位 template が張る部分空間と、共分散固有モード群との principal angle も測定する。ただし、capillary subspace が主要固有空間に強く現れない場合でも、外場に共役な observable への寄与が小さいとは限らない。
+
+## 現在までの pilot で見えていること
+
+現時点の結果は次のように整理できる。
+
+1. 低波数では、外場に共役な observable の sector decomposition において interface-like 成分が大きい。
+2. $q$ を増やすと microscopic / packing sector の寄与が増大する。
+3. $q\sim q_*$ 付近では packing sector が支配的になる。
+4. 二界面系では slab 並進 $H_q$ より thickness / breathing mode $W_q$ の方が強い。
+5. 単純な $\langle|h_q|^2\rangle\propto q^{-2}$ は、現在の有限サイズ pilot では明瞭には確認されていない。
+6. このこと自体は外場応答の描像を否定しない。毛細管波則は本研究の主目的ではなく、低 $q$ 側の補助診断である。
+
+したがって、現在の中心仮説は単純な
 
 $$
-C\mathbf v_n
-=
-\lambda_n\mathbf v_n
+\text{Goldstone mode}
+\longrightarrow
+\text{packing mode}
 $$
 
-として解く。
-
-各固有モードが並進 Goldstone モードにどれだけ近いかを
+という固有モード交差ではなく、
 
 $$
-O_n(q)
-=
-\frac{
-\left|
-\langle v_n,-\rho_0'\rangle
-\right|^2
-}{
-\langle v_n,v_n\rangle
-\langle\rho_0',\rho_0'\rangle
+\boxed{
+\text{外場応答の内部構造が}
+\quad
+\text{interface-like}
+\longrightarrow
+\text{packing-like}
+\quad
+\text{へ移る}
 }
 $$
 
-で評価する。
+という crossover である。
 
-長波長 capillary 領域では、理想的には Goldstone-like branch に対して
+## 第一段階：$q_\perp=0$
 
-$$
-O_G(q)\simeq 1
-$$
-
-かつ
-
-$$
-\lambda_G(q)\propto \frac{1}{q^2}
-$$
-
-が期待される。したがって
-
-$$
-q^2\lambda_G(q)
-$$
-
-が低波数域でほぼ一定になるかを主要な診断量の一つとする。
-
-## 計算パイプライン
-
-1. NVT Lennard-Jones 液体–気体 slab を Metropolis Monte Carlo 法で生成する。
-2. PBC と整合する面内波数 $q_\parallel$ に対して $\rho_q(z,t)$ を保存する。
-3. $C(z,z';q_\parallel)$ を構築する。
-4. 共分散行列を固有値分解し、$-\rho_0'(z)$ との overlap を計算する。
-5. 各 snapshot を Goldstone 射影成分とその直交成分へ分解する。
-6. 各 sector の揺らぎ寄与と closure error を計算する。
-7. box size、sampling 長、replica、自己相関時間に対する収束性を検証する。
-8. 必要に応じて小振幅外場 $\pm A$ を加え、平衡揺らぎ応答と有限差分自由エネルギー曲率を比較する。
-
-## 現在の第一段階
-
-最初の解析では $q_\perp=0$ に集中する。
-
-外場を
+現在は
 
 $$
 V_{\mathrm{ext}}(x,z)
@@ -182,63 +286,29 @@ V_{\mathrm{ext}}(x,z)
 A\cos(q_\parallel x+q_\perp z)
 $$
 
-とすると、$q_\perp\neq0$ では界面の絶対位置に対する位相感度が追加される。一方、$q_\perp=0$ ではこの絶対位相問題を避けつつ、有限 $q_\parallel$ の界面変位モードと microscopic packing の混成を調べることができる。
-
-なお、$q_\perp=0$ であっても有限 $q_\parallel$ の capillary mode との結合そのものが消えるわけではない。
-
-## Goldstone-to-packing crossover の判定
-
-本研究で検証したい中心仮説は
+に対して
 
 $$
-\text{Goldstone / capillary}
-\quad\longrightarrow\quad
-\text{mode mixing}
-\quad\longrightarrow\quad
-\text{microscopic packing}
+q_\perp=0
 $$
 
-という波数に沿った crossover である。
+に集中している。
 
-これを支持する結果として、少なくとも次を期待する。
-
-- 低波数で Goldstone-like eigenmode の overlap $O_G(q)$ が大きい。
-- 低波数で $q^2\lambda_G(q)$ が概ね一定となる。
-- 分子スケールの波数に近づくにつれて $O_G(q)$ が低下する。
-- 同時に非並進モードとの混成が増える。
-- packing sector および cross sector の寄与が増大する。
-
-液体構造の代表的な microscopic scale として、bulk liquid structure factor $S(q)$ の第一ピーク位置 $q_*$ を基準に用いる。
-
-## 応答の closure
-
-射影後の観測量を
+この場合、外場は
 
 $$
-X
+V_{\mathrm{ext}}(x)
 =
-X_h+X_\perp
+A\cos(q_\parallel x)
 $$
 
-と書けば、分散は
+となり、界面の絶対 $z$ 位置に対する余分な位相感度を避けられる。
 
-$$
-\operatorname{Var}(X)
-=
-\operatorname{Var}(X_h)
-+
-2\operatorname{Cov}(X_h,X_\perp)
-+
-\operatorname{Var}(X_\perp)
-$$
-
-を満たす。
-
-コードではこの恒等式の残差を closure error として保存し、射影・規格化・実装の整合性を確認する。
+ただし $q_\perp=0$ でも有限 $q_\parallel$ の界面変位との結合が消えるわけではない。
 
 ## PBC と波数
 
-現在の lateral mode は box 長 $L_x$ に対して
+現在の lateral mode は
 
 $$
 q_\parallel
@@ -258,29 +328,35 @@ $$
 
 を満たす必要がある。
 
-これは過去の解析で問題となった、slab 系と bulk reference 系の PBC 非整合による偽の線形応答を避けるために重要である。
+これは slab 系と bulk reference 系の PBC 非整合による偽の線形応答を避けるために重要である。
 
-## リポジトリ構成
+## 計算パイプライン
 
-```text
-config/                  Monte Carlo・解析条件
-src/wvsr/                MC および解析ライブラリ
-scripts/                 実行用スクリプト
-results/                 計算結果
-.github/workflows/       GitHub Actions による自動テスト・pilot 計算
-```
+1. NVT Lennard-Jones 液体–気体 slab を Metropolis Monte Carlo 法で生成する。
+2. PBC と整合する波数 $q_\parallel$ に対して $\rho_q(z,t)$ を保存する。
+3. 外場に共役な密度モードの分散を求める。
+4. 界面 sector と microscopic packing sector に分解する。
+5. 二界面の collective coordinate $H_q$、$W_q$ を解析する。
+6. 密度共分散の固有モード・principal angle・residual PC を補助的に解析する。
+7. bulk reference を用いて界面過剰 susceptibility $\chi_\gamma(q)$ を構成する。
+8. 必要に応じて小振幅外場 $\pm A$ の直接計算と fluctuation–dissipation relation を比較する。
+9. box size、run length、replica、自己相関時間に対する収束性を検証する。
 
-主なスクリプトは以下である。
+## 主なスクリプト
 
 ```text
 scripts/run_mc.py
 scripts/analyze_modes.py
+scripts/analyze_capillary_coordinates.py
+scripts/analyze_translation_thickness.py
+scripts/analyze_thickness_packing_coupling.py
+scripts/fit_capillary_massive_model.py
 scripts/plot_mode_summary.py
 ```
 
-## 現在の pilot 計算
+## 現在の pilot 条件
 
-現在の full-box pilot では
+full-box pilot では
 
 $$
 T^*=1.0,
@@ -304,13 +380,13 @@ $$
 
 として、低波数域から packing scale 付近まで複数の $n_x$ を同一 trajectory から計測する。
 
-この pilot は Goldstone-to-packing crossover の有無を予備判定するためのものであり、現時点では publication-quality の収束を保証するものではない。
+これらの値は現時点では physics pilot 用であり、publication-quality の最終条件ではない。
 
 ## 注意
 
-Goldstone / packing 分解の各成分は、射影の定義に依存する診断量である。一方で全界面自由エネルギー応答 $\chi_\gamma$ は熱力学的観測量である。
+interface / packing 分解や $H_q$、$W_q$ は、密度揺らぎの内部構造を理解するための診断量であり、定義や射影 convention に依存する。
 
-したがって最終的には、モード分解だけでなく
+一方、最終的な熱力学的観測量は
 
 $$
 \chi_\gamma(\mathbf q)
@@ -320,4 +396,6 @@ $$
 \right|_{A=0}
 $$
 
-そのものとの対応を検証することを目標とする。
+である。
+
+したがって本研究では、**毛細管波理論を先に仮定してデータを解釈するのではなく、外場応答を第一に測定し、その内部構造として界面変位・厚み揺らぎ・packing を分解する**という順序を採用する。
