@@ -4,12 +4,15 @@ on:
   push:
     paths:
       - "config/pilot_fullbox.yaml"
+      - "config/pilot_bulk_liquid.yaml"
+      - "config/pilot_bulk_vapor.yaml"
       - "src/wvsr/**"
       - "scripts/run_mc.py"
       - "scripts/analyze_modes.py"
       - "scripts/analyze_capillary_coordinates.py"
       - "scripts/analyze_translation_thickness.py"
       - "scripts/analyze_thickness_packing_coupling.py"
+      - "scripts/analyze_interfacial_susceptibility.py"
       - "scripts/fit_capillary_massive_model.py"
       - "scripts/plot_mode_summary.py"
       - ".github/workflows/pilot-fullbox.yml"
@@ -31,6 +34,19 @@ jobs:
       - name: Run full-box A=0 pilot
         run: |
           python scripts/run_mc.py --config config/pilot_fullbox.yaml --output results/raw/pilot_fullbox.npz
+      - name: Run pilot bulk-liquid reference
+        run: |
+          python scripts/run_mc.py --config config/pilot_bulk_liquid.yaml --output results/raw/pilot_bulk_liquid.npz
+      - name: Run pilot bulk-vapor reference
+        run: |
+          python scripts/run_mc.py --config config/pilot_bulk_vapor.yaml --output results/raw/pilot_bulk_vapor.npz
+      - name: Analyze physical interfacial susceptibility
+        run: |
+          python scripts/analyze_interfacial_susceptibility.py \
+            results/raw/pilot_fullbox.npz \
+            results/raw/pilot_bulk_liquid.npz \
+            results/raw/pilot_bulk_vapor.npz \
+            --output-dir results/processed/interfacial_susceptibility
       - name: Analyze all q modes
         run: |
           python scripts/analyze_modes.py results/raw/pilot_fullbox.npz --output-dir results/processed/pilot_modes --n-modes 16
@@ -103,6 +119,13 @@ jobs:
               assert 0.0 <= float(r['eta_W_perp']) <= 1.0 + 1e-12
               assert 0.0 <= float(r['eta_H_perp']) <= 1.0 + 1e-12
 
+          g = Path('results/processed/interfacial_susceptibility/interfacial_susceptibility_summary.csv')
+          grows = list(csv.DictReader(g.open()))
+          assert len(grows) == 12, len(grows)
+          for r in grows:
+              for key in ['qx','var_X_slab','var_X_bulk_matched','var_X_excess','chi_gamma_pilot']:
+                  assert math.isfinite(float(r[key])), (key, r[key])
+
           print('all extended pilot outputs validated')
           PY
       - name: Upload pilot results
@@ -111,6 +134,9 @@ jobs:
           name: pilot-fullbox-extended-results
           path: |
             results/raw/pilot_fullbox.npz
+            results/raw/pilot_bulk_liquid.npz
+            results/raw/pilot_bulk_vapor.npz
+            results/processed/interfacial_susceptibility/**
             results/processed/pilot_modes/**
             results/processed/capillary_coordinates/**
             results/processed/translation_thickness/**
