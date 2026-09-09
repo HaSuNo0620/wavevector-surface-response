@@ -1,0 +1,27 @@
+simulation:
+  seed: 20260922
+  temperature: 1.0
+  box: [16.0, 16.0, 48.0]
+  n_particles: 46
+  cutoff: 2.5
+  neighbor_skin: 0.5
+  max_displacement: 0.20
+  equilibration_sweeps: 400
+  production_sweeps: 1200
+  sample_every: 5
+  z_bins: 96
+  two_interfaces: false
+
+initialization:
+  mode: uniform
+  liquid_density: 0.0037434895833333335
+  liquid_fraction_z: 1.0
+  min_separation: 0.85
+
+wavevectors:
+  n_x: [1, 4, 12, 16, 18]
+
+notes:
+  stage: "finite-A TI bulk-vapor reference pilot"
+  purpose: "measure the homogeneous vapor contribution to dF/dA at the same q and A as the slab"
+  caveat: "pilot density matched to the current slab, not final coexistence data"
