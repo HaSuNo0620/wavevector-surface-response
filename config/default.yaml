@@ -21,7 +21,8 @@ initialization:
 
 wavevectors:
   # Stage 1: q_perp=0. Integer n_x guarantees exact PBC commensurability.
-  n_x: [4, 6, 8, 10, 12, 14, 16, 18, 20]
+  # Include both long-wavelength interface response and the molecular packing range.
+  n_x: [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 
 analysis:
   derivative_smoothing_bins: 3
@@ -30,5 +31,6 @@ analysis:
   bootstrap_blocks: 20
 
 notes:
-  stage: "q_perp=0 Goldstone-to-packing diagnostic"
+  stage: "q_perp=0 wavevector-resolved interfacial-response sector crossover"
+  purpose: "Measure the external-field susceptibility first, then resolve interface-like, cross, thickness/breathing, and microscopic packing contributions. Capillary q^-2 scaling is only a long-wavelength auxiliary diagnostic."
   warning: "These numerical defaults are an internally consistent starting point, not final production parameters. Match N, box, coexistence densities, cutoff and run length to the validated one-component model before publication-quality runs."
