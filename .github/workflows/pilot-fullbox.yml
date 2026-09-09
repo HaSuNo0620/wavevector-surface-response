@@ -8,6 +8,7 @@ on:
       - "scripts/run_mc.py"
       - "scripts/analyze_modes.py"
       - "scripts/analyze_capillary_coordinates.py"
+      - "scripts/analyze_translation_thickness.py"
       - "scripts/fit_capillary_massive_model.py"
       - "scripts/plot_mode_summary.py"
       - ".github/workflows/pilot-fullbox.yml"
@@ -35,9 +36,12 @@ jobs:
       - name: Analyze capillary coordinates
         run: |
           python scripts/analyze_capillary_coordinates.py results/raw/pilot_fullbox.npz --output-dir results/processed/capillary_coordinates
-      - name: Fit massless/massive capillary models
+      - name: Analyze translation and thickness modes
         run: |
-          python scripts/fit_capillary_massive_model.py results/processed/capillary_coordinates/capillary_coordinate_summary.csv --output-dir results/processed/capillary_fit --nfit 4
+          python scripts/analyze_translation_thickness.py results/raw/pilot_fullbox.npz --output-dir results/processed/translation_thickness
+      - name: Fit capillary-coordinate models
+        run: |
+          python scripts/fit_capillary_massive_model.py results/processed/capillary_coordinates/capillary_coordinate_summary.csv --output-dir results/processed/capillary_model_fits
       - name: Make diagnostic figures
         run: |
           python scripts/plot_mode_summary.py results/processed/pilot_modes/mode_summary.csv --output-dir results/figures/pilot
@@ -47,6 +51,7 @@ jobs:
           import csv
           import math
           from pathlib import Path
+
           p = Path('results/processed/pilot_modes/mode_summary.csv')
           rows = list(csv.DictReader(p.open()))
           assert len(rows) == 12, len(rows)
@@ -75,22 +80,27 @@ jobs:
               assert float(r['var_h_plus']) >= 0.0
               assert float(r['var_h_minus']) >= 0.0
 
-          f = Path('results/processed/capillary_fit/massive_model_comparison.csv')
-          frows = list(csv.DictReader(f.open()))
-          assert len(frows) == 2, len(frows)
-          for r in frows:
-              for key in ['aicc_const','aicc_massless','aicc_massive','massive_xi2','inverse_beta']:
+          t = Path('results/processed/translation_thickness/translation_thickness_summary.csv')
+          trows = list(csv.DictReader(t.open()))
+          assert len(trows) == 12, len(trows)
+          for r in trows:
+              for key in ['qx','var_H','var_W','q2_var_H','q2_var_W','corr_HW_re','thickness_to_translation_ratio']:
                   assert math.isfinite(float(r[key])), (key, r[key])
-          print('principal-angle, capillary-coordinate and model-fit outputs validated')
+              assert float(r['var_H']) >= 0.0
+              assert float(r['var_W']) >= 0.0
+              assert float(r['thickness_to_translation_ratio']) >= 0.0
+
+          print('principal-angle, capillary-coordinate, and translation-thickness outputs validated')
           PY
       - name: Upload pilot results
         uses: actions/upload-artifact@v4
         with:
-          name: pilot-fullbox-principal-angle-results
+          name: pilot-fullbox-extended-results
           path: |
             results/raw/pilot_fullbox.npz
             results/processed/pilot_modes/**
             results/processed/capillary_coordinates/**
-            results/processed/capillary_fit/**
+            results/processed/translation_thickness/**
+            results/processed/capillary_model_fits/**
             results/figures/pilot/**
           retention-days: 30
