@@ -1,0 +1,162 @@
+name: ti-symmetric-replicas
+
+on:
+  push:
+    paths:
+      - "scripts/run_mc.py"
+      - "scripts/analyze_symmetric_ti.py"
+      - "config/ti_slab.yaml"
+      - "config/ti_bulk_liquid.yaml"
+      - "config/ti_bulk_vapor.yaml"
+      - "src/wvsr/**"
+      - "pyproject.toml"
+      - ".github/workflows/ti-symmetric-replicas.yml"
+  workflow_dispatch:
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 9
+      matrix:
+        phase: [slab, liquid, vapor]
+        replica: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Select config and seed
+        id: cfg
+        shell: bash
+        run: |
+          case "${{ matrix.phase }}" in
+            slab)   echo "path=config/ti_slab.yaml" >> "$GITHUB_OUTPUT"; POFF=100000 ;;
+            liquid) echo "path=config/ti_bulk_liquid.yaml" >> "$GITHUB_OUTPUT"; POFF=200000 ;;
+            vapor)  echo "path=config/ti_bulk_vapor.yaml" >> "$GITHUB_OUTPUT"; POFF=300000 ;;
+          esac
+          SEED=$((20260909 + POFF + 1000*${{ matrix.replica }}))
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run replica baseline
+        run: |
+          python scripts/run_mc.py \
+            --config "${{ steps.cfg.outputs.path }}" \
+            --output "results/raw/sym_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz" \
+            --seed "${{ steps.cfg.outputs.seed }}"
+      - name: Upload baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: sym-baseline-${{ matrix.phase }}-rep${{ matrix.replica }}
+          path: results/raw/sym_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 18
+      matrix:
+        phase: [slab, liquid, vapor]
+        nx: [1, 16, 18]
+        amplitude: ["0.005", "0.01", "0.02"]
+        sign: ["p", "m"]
+        replica: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Select config, amplitude, and seed
+        id: cfg
+        shell: bash
+        run: |
+          case "${{ matrix.phase }}" in
+            slab)   echo "path=config/ti_slab.yaml" >> "$GITHUB_OUTPUT"; POFF=100000 ;;
+            liquid) echo "path=config/ti_bulk_liquid.yaml" >> "$GITHUB_OUTPUT"; POFF=200000 ;;
+            vapor)  echo "path=config/ti_bulk_vapor.yaml" >> "$GITHUB_OUTPUT"; POFF=300000 ;;
+          esac
+          if [ "${{ matrix.sign }}" = "m" ]; then
+            AMP="-${{ matrix.amplitude }}"
+            SOFF=500
+          else
+            AMP="${{ matrix.amplitude }}"
+            SOFF=0
+          fi
+          case "${{ matrix.amplitude }}" in
+            "0.005") AOFF=5 ;;
+            "0.01")  AOFF=10 ;;
+            "0.02")  AOFF=20 ;;
+          esac
+          SEED=$((20260909 + POFF + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run symmetric finite-A point
+        shell: bash
+        run: |
+          TAG=$(echo "${{ matrix.amplitude }}" | sed 's/\./p/g')
+          OUT="results/raw/sym_${{ matrix.phase }}_nx${{ matrix.nx }}_${{ matrix.sign }}A${TAG}_rep${{ matrix.replica }}.npz"
+          python scripts/run_mc.py \
+            --config "${{ steps.cfg.outputs.path }}" \
+            --output "$OUT" \
+            --field-amplitude "${{ steps.cfg.outputs.amplitude }}" \
+            --field-nx "${{ matrix.nx }}" \
+            --seed "${{ steps.cfg.outputs.seed }}"
+      - name: Upload scan point
+        uses: actions/upload-artifact@v4
+        with:
+          name: sym-scan-${{ matrix.phase }}-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/sym_${{ matrix.phase }}_nx${{ matrix.nx }}_${{ matrix.sign }}A*_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  analyze:
+    needs: [baseline, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Download all symmetric TI inputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sym-*
+          path: results/symmetric_inputs
+          merge-multiple: true
+      - name: Analyze odd/even response and replica statistics
+        run: |
+          python scripts/analyze_symmetric_ti.py \
+            results/symmetric_inputs \
+            --output-dir results/processed/ti_symmetric
+      - name: Validate outputs
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          p = 'results/processed/ti_symmetric/symmetric_chi_comparison.csv'
+          df = pd.read_csv(p)
+          assert len(df) == 3, len(df)
+          assert (df['n_replicas'] == 3).all()
+          assert df[['qx','chi_ti_odd_cubic','chi_ti_odd_linear','chi_ti_integral','chi_fdt']].notna().all().all()
+          print(df.to_string(index=False))
+          PY
+      - name: Upload symmetric TI results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ti-symmetric-replica-results
+          path: results/processed/ti_symmetric/**
+          retention-days: 30
