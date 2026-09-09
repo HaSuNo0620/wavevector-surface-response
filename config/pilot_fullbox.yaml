@@ -20,7 +20,7 @@ initialization:
   min_separation: 0.85
 
 wavevectors:
-  # q_x = 2*pi*n_x/Lx.  Include low-q Goldstone sector and q~q* packing sector.
+  # q_x = 2*pi*n_x/Lx. Include low-q Goldstone sector and q~q* packing sector.
   n_x: [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20]
 
 analysis:
@@ -28,6 +28,7 @@ analysis:
   bootstrap_blocks: 12
 
 notes:
-  stage: "full-box physics pilot; A=0; q_perp=0"
-  purpose: "test Goldstone-to-packing mode crossover before long production"
+  stage: "corrected full-box physics pilot; A=0; q_perp=0"
+  purpose: "test Goldstone-to-packing mode crossover with two-interface capillary subspace"
   caveat: "trajectory length is a pilot, not a publication-quality convergence claim"
+  corrections: "pre-trial Verlet rebuild and two-interface capillary-subspace projection enabled"
