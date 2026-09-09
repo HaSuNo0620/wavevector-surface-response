@@ -31,10 +31,6 @@ def main() -> None:
     d = read_summary(args.summary)
     order = np.argsort(d["qx"])
     q = d["qx"][order]
-    overlap = d["capillary_overlap"][order]
-    overlap2 = d["second_capillary_overlap"][order]
-    lam = d["capillary_eigenvalue"][order]
-    lam2 = d["second_capillary_eigenvalue"][order]
     total = d["var_total"][order]
     hh = d["var_hh"][order]
     cross2 = 2.0 * d["cross_h_perp"][order]
@@ -43,47 +39,52 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     fig, ax = plt.subplots()
-    ax.plot(q, overlap, marker="o", label="1st capillary-like mode")
-    ax.plot(q, overlap2, marker="s", label="2nd capillary-like mode")
+    for key, label, marker in [
+        ("capture_m2", "m=2", "o"),
+        ("capture_m4", "m=4", "s"),
+        ("capture_m8", "m=8", "^"),
+        ("capture_m16", "m=16", "d"),
+    ]:
+        ax.plot(q, d[key][order], marker=marker, label=label)
     ax.set_xlabel(r"$q_\parallel$")
-    ax.set_ylabel("overlap with two-interface capillary subspace")
+    ax.set_ylabel("capillary subspace capture fraction")
     ax.set_ylim(-0.02, 1.02)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(args.output_dir / "capillary_overlap_vs_q.png", dpi=180)
+    fig.savefig(args.output_dir / "cumulative_capture_vs_q.png", dpi=180)
     plt.close(fig)
 
     fig, ax = plt.subplots()
-    ax.plot(q, lam, marker="o", label="1st")
-    ax.plot(q, lam2, marker="s", label="2nd")
+    ax.plot(q, d["principal1_m4"][order], marker="o", label=r"$\cos^2\theta_1$, m=4")
+    ax.plot(q, d["principal2_m4"][order], marker="s", label=r"$\cos^2\theta_2$, m=4")
+    ax.plot(q, d["principal1_m8"][order], marker="^", label=r"$\cos^2\theta_1$, m=8")
+    ax.plot(q, d["principal2_m8"][order], marker="d", label=r"$\cos^2\theta_2$, m=8")
     ax.set_xlabel(r"$q_\parallel$")
-    ax.set_ylabel("capillary-like covariance eigenvalue")
-    ax.set_yscale("log")
+    ax.set_ylabel("principal-angle squared cosine")
+    ax.set_ylim(-0.02, 1.02)
     ax.legend()
     fig.tight_layout()
-    fig.savefig(args.output_dir / "capillary_eigenvalue_vs_q.png", dpi=180)
-    plt.close(fig)
-
-    fig, ax = plt.subplots()
-    ax.plot(q, lam * q * q, marker="o", label="1st")
-    ax.plot(q, lam2 * q * q, marker="s", label="2nd")
-    ax.set_xlabel(r"$q_\parallel$")
-    ax.set_ylabel(r"$q_\parallel^2\lambda_{cap}$")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(args.output_dir / "capillary_q2lambda_vs_q.png", dpi=180)
+    fig.savefig(args.output_dir / "principal_angles_vs_q.png", dpi=180)
     plt.close(fig)
 
     denom = np.where(np.abs(total) > 1e-30, total, np.nan)
     fig, ax = plt.subplots()
     ax.plot(q, hh / denom, marker="o", label="capillary subspace")
-    ax.plot(q, cross2 / denom, marker="o", label="2 x cross")
-    ax.plot(q, pp / denom, marker="o", label="orthogonal/packing")
+    ax.plot(q, cross2 / denom, marker="s", label="2 x cross")
+    ax.plot(q, pp / denom, marker="^", label="orthogonal/packing")
     ax.set_xlabel(r"$q_\parallel$")
     ax.set_ylabel("fraction of total projected variance")
     ax.legend()
     fig.tight_layout()
     fig.savefig(args.output_dir / "sector_fractions_vs_q.png", dpi=180)
+    plt.close(fig)
+
+    fig, ax = plt.subplots()
+    ax.plot(q, d["profile_drift_rms"][order], marker="o")
+    ax.set_xlabel(r"$q_\parallel$")
+    ax.set_ylabel("first-half vs second-half profile RMS")
+    fig.tight_layout()
+    fig.savefig(args.output_dir / "profile_drift_rms.png", dpi=180)
     plt.close(fig)
 
     print(f"saved figures to {args.output_dir}")
