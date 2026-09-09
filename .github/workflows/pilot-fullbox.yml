@@ -42,19 +42,27 @@ jobs:
           p = Path('results/processed/pilot_modes/mode_summary.csv')
           rows = list(csv.DictReader(p.open()))
           assert len(rows) == 12, len(rows)
+          keys = [
+              'qx','capture_m2','capture_m4','capture_m8','capture_m16',
+              'principal1_m4','principal2_m4','principal1_m8','principal2_m8',
+              'var_total','closure_error','interface_z_1','interface_z_2','profile_drift_rms'
+          ]
           for r in rows:
-              for key in ['qx','capillary_overlap','capillary_eigenvalue','second_capillary_overlap','var_total','closure_error','interface_z_1','interface_z_2']:
+              for key in keys:
                   assert math.isfinite(float(r[key])), (key, r[key])
-              assert 0.0 <= float(r['capillary_overlap']) <= 1.0
-              assert 0.0 <= float(r['second_capillary_overlap']) <= 1.0
+              for key in ['capture_m2','capture_m4','capture_m8','capture_m16','principal1_m4','principal2_m4','principal1_m8','principal2_m8']:
+                  assert 0.0 <= float(r[key]) <= 1.0, (key, r[key])
+              assert float(r['capture_m2']) <= float(r['capture_m4']) + 1e-12
+              assert float(r['capture_m4']) <= float(r['capture_m8']) + 1e-12
+              assert float(r['capture_m8']) <= float(r['capture_m16']) + 1e-12
               assert float(r['interface_z_1']) < float(r['interface_z_2'])
               assert abs(float(r['closure_error'])) < 1e-8 * max(1.0, abs(float(r['var_total'])))
-          print('pilot output validation passed')
+          print('principal-angle pilot output validation passed')
           PY
       - name: Upload pilot results
         uses: actions/upload-artifact@v4
         with:
-          name: pilot-fullbox-results
+          name: pilot-fullbox-principal-angle-results
           path: |
             results/raw/pilot_fullbox.npz
             results/processed/pilot_modes/**
