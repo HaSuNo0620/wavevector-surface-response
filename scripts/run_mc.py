@@ -21,6 +21,7 @@ def main() -> None:
     p.add_argument("--field-amplitude", type=float, default=0.0)
     p.add_argument("--field-nx", type=int, default=0, help="integer Fourier index for optional parallel field")
     p.add_argument("--field-nz", type=int, default=0, help="integer Fourier index for optional normal field")
+    p.add_argument("--seed", type=int, default=None, help="optional RNG seed override (useful for replicas)")
     args = p.parse_args()
 
     cfg_raw = load_config(args.config)
@@ -39,7 +40,7 @@ def main() -> None:
         production_sweeps=int(s["production_sweeps"]),
         sample_every=int(s["sample_every"]),
         z_bins=int(s["z_bins"]),
-        seed=int(s.get("seed", 0)),
+        seed=int(args.seed if args.seed is not None else s.get("seed", 0)),
     )
 
     lx, _, lz = cfg.box
@@ -66,6 +67,7 @@ def main() -> None:
     print(f"samples: {len(result['sample_sweeps'])}")
     print(f"acceptance_rate: {result['acceptance_rate']:.4f}")
     print(f"final_max_displacement: {result['final_max_displacement']:.5f}")
+    print(f"seed: {cfg.seed}")
     print("qx:", qx)
 
 
