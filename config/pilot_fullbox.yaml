@@ -26,7 +26,7 @@ analysis:
   bootstrap_blocks: 12
 
 notes:
-  stage: "principal-angle full-box pilot; A=0; q_perp=0"
-  purpose: "test whether leading covariance eigenspaces capture the two-interface capillary subspace before the packing regime"
-  caveat: "still a pilot; convergence requires replicas and box-size checks"
-  corrections: "pre-trial Verlet rebuild, two-interface capillary projection, principal-angle cumulative capture"
+  stage: "full-box wavevector-resolved interfacial-response pilot; A=0; q_perp=0"
+  purpose: "Resolve how the external-field susceptibility crosses over from interface-like response at low q to microscopic packing response near q*. Principal-angle, H/W, and capillary-wave diagnostics are secondary structural probes."
+  caveat: "still a pilot; convergence requires replicas, autocorrelation analysis, and box-size checks"
+  corrections: "pre-trial Verlet rebuild, two-interface projection, principal-angle cumulative capture, translation/thickness coordinates, thickness-packing coupling"
