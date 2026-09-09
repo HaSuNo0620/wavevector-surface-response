@@ -9,6 +9,7 @@ on:
       - "scripts/analyze_modes.py"
       - "scripts/analyze_capillary_coordinates.py"
       - "scripts/analyze_translation_thickness.py"
+      - "scripts/analyze_thickness_packing_coupling.py"
       - "scripts/fit_capillary_massive_model.py"
       - "scripts/plot_mode_summary.py"
       - ".github/workflows/pilot-fullbox.yml"
@@ -39,6 +40,9 @@ jobs:
       - name: Analyze translation and thickness modes
         run: |
           python scripts/analyze_translation_thickness.py results/raw/pilot_fullbox.npz --output-dir results/processed/translation_thickness
+      - name: Analyze thickness-packing coupling
+        run: |
+          python scripts/analyze_thickness_packing_coupling.py results/raw/pilot_fullbox.npz --output-dir results/processed/thickness_packing
       - name: Fit capillary-coordinate models
         run: |
           python scripts/fit_capillary_massive_model.py results/processed/capillary_coordinates/capillary_coordinate_summary.csv --output-dir results/processed/capillary_model_fits
@@ -90,7 +94,16 @@ jobs:
               assert float(r['var_W']) >= 0.0
               assert float(r['thickness_to_translation_ratio']) >= 0.0
 
-          print('principal-angle, capillary-coordinate, and translation-thickness outputs validated')
+          u = Path('results/processed/thickness_packing/thickness_packing_summary.csv')
+          urows = list(csv.DictReader(u.open()))
+          assert len(urows) == 12, len(urows)
+          for r in urows:
+              for key in ['qx','eta_W_perp','eta_H_perp','max_point_corr_W_perp','max_point_corr_H_perp','R2_W_pc4','R2_H_pc4']:
+                  assert math.isfinite(float(r[key])), (key, r[key])
+              assert 0.0 <= float(r['eta_W_perp']) <= 1.0 + 1e-12
+              assert 0.0 <= float(r['eta_H_perp']) <= 1.0 + 1e-12
+
+          print('all extended pilot outputs validated')
           PY
       - name: Upload pilot results
         uses: actions/upload-artifact@v4
@@ -101,6 +114,7 @@ jobs:
             results/processed/pilot_modes/**
             results/processed/capillary_coordinates/**
             results/processed/translation_thickness/**
+            results/processed/thickness_packing/**
             results/processed/capillary_model_fits/**
             results/figures/pilot/**
           retention-days: 30
