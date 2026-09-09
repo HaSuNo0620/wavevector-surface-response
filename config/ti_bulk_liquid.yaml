@@ -1,0 +1,27 @@
+simulation:
+  seed: 20260921
+  temperature: 1.0
+  box: [16.0, 16.0, 8.0]
+  n_particles: 1483
+  cutoff: 2.5
+  neighbor_skin: 0.5
+  max_displacement: 0.12
+  equilibration_sweeps: 600
+  production_sweeps: 1200
+  sample_every: 5
+  z_bins: 32
+  two_interfaces: false
+
+initialization:
+  mode: uniform
+  liquid_density: 0.72412109375
+  liquid_fraction_z: 1.0
+  min_separation: 0.85
+
+wavevectors:
+  n_x: [1, 4, 12, 16, 18]
+
+notes:
+  stage: "finite-A TI bulk-liquid reference pilot"
+  purpose: "measure the homogeneous liquid contribution to dF/dA at the same q and A as the slab"
+  caveat: "pilot density matched to the current slab, not final coexistence data"
