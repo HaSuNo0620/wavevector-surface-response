@@ -1,0 +1,140 @@
+name: ti-pilot
+
+on:
+  push:
+    paths:
+      - "config/ti_slab.yaml"
+      - "config/ti_bulk_liquid.yaml"
+      - "config/ti_bulk_vapor.yaml"
+      - "scripts/run_mc.py"
+      - "scripts/analyze_ti_scan.py"
+      - "src/wvsr/**"
+      - "pyproject.toml"
+      - ".github/workflows/ti-pilot.yml"
+  workflow_dispatch:
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        phase: [slab, liquid, vapor]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Select config
+        id: cfg
+        shell: bash
+        run: |
+          case "${{ matrix.phase }}" in
+            slab) echo "path=config/ti_slab.yaml" >> "$GITHUB_OUTPUT" ;;
+            liquid) echo "path=config/ti_bulk_liquid.yaml" >> "$GITHUB_OUTPUT" ;;
+            vapor) echo "path=config/ti_bulk_vapor.yaml" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Run A=0 baseline
+        run: |
+          python scripts/run_mc.py \
+            --config "${{ steps.cfg.outputs.path }}" \
+            --output "results/raw/ti_baseline_${{ matrix.phase }}.npz"
+      - name: Upload baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: ti-baseline-${{ matrix.phase }}
+          path: results/raw/ti_baseline_${{ matrix.phase }}.npz
+          retention-days: 30
+
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        phase: [slab, liquid, vapor]
+        nx: [1, 4, 12, 16, 18]
+        amplitude: ["0.01", "0.02", "0.04"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Select config
+        id: cfg
+        shell: bash
+        run: |
+          case "${{ matrix.phase }}" in
+            slab) echo "path=config/ti_slab.yaml" >> "$GITHUB_OUTPUT" ;;
+            liquid) echo "path=config/ti_bulk_liquid.yaml" >> "$GITHUB_OUTPUT" ;;
+            vapor) echo "path=config/ti_bulk_vapor.yaml" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Run finite-A point
+        shell: bash
+        run: |
+          TAG=$(echo "${{ matrix.amplitude }}" | sed 's/-/m/g; s/\./p/g')
+          OUT="results/raw/ti_${{ matrix.phase }}_nx${{ matrix.nx }}_A${TAG}.npz"
+          python scripts/run_mc.py \
+            --config "${{ steps.cfg.outputs.path }}" \
+            --output "$OUT" \
+            --field-amplitude "${{ matrix.amplitude }}" \
+            --field-nx "${{ matrix.nx }}"
+      - name: Upload scan point
+        uses: actions/upload-artifact@v4
+        with:
+          name: ti-scan-${{ matrix.phase }}-nx${{ matrix.nx }}-A${{ matrix.amplitude }}
+          path: results/raw/ti_${{ matrix.phase }}_nx${{ matrix.nx }}_A*.npz
+          retention-days: 30
+
+  analyze:
+    needs: [baseline, scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Download all TI inputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ti-*
+          path: results/ti_inputs
+          merge-multiple: true
+      - name: Analyze TI and FDT
+        run: |
+          python scripts/analyze_ti_scan.py \
+            results/ti_inputs \
+            --output-dir results/processed/ti_scan
+      - name: Validate outputs
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          from pathlib import Path
+          p = Path('results/processed/ti_scan/ti_chi_comparison.csv')
+          df = pd.read_csv(p)
+          assert len(df) == 5, len(df)
+          assert df[['qx','chi_ti_derivative','chi_ti_integral','chi_fdt']].notna().all().all()
+          print(df.to_string(index=False))
+          PY
+      - name: Upload TI results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ti-pilot-results
+          path: |
+            results/processed/ti_scan/**
+          retention-days: 30
