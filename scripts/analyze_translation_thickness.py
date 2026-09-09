@@ -8,7 +8,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from wvsr.analysis import two_interface_templates, decompose_subspace
-from scripts.analyze_capillary_coordinates import _raw_template_norms
+
+
+def _raw_template_norms(rho0: np.ndarray, z: np.ndarray, centers: np.ndarray) -> np.ndarray:
+    rho = np.asarray(rho0, dtype=float)
+    zz = np.asarray(z, dtype=float)
+    kernel = np.asarray([1.0, 2.0, 3.0, 2.0, 1.0]) / 9.0
+    smooth = rho.copy()
+    for _ in range(2):
+        acc = np.zeros_like(smooth)
+        for w, off in zip(kernel, np.arange(-2, 3)):
+            acc += w * np.roll(smooth, int(off))
+        smooth = acc
+    deriv = -np.gradient(smooth, zz, edge_order=2)
+    dz = float(np.mean(np.diff(zz)))
+    lz = dz * len(zz)
+    separation = min(abs(centers[1] - centers[0]), lz - abs(centers[1] - centers[0]))
+    sigma = max(2.0 * dz, separation / 6.0)
+    norms = []
+    for center in centers:
+        d = np.abs(zz - center)
+        d = np.minimum(d, lz - d)
+        window = np.exp(-0.5 * (d / sigma) ** 2)
+        raw = deriv * window
+        norms.append(np.sqrt(np.real(np.trapezoid(np.conj(raw) * raw, zz))))
+    return np.asarray(norms, dtype=float)
 
 
 def main() -> None:
@@ -36,8 +60,6 @@ def main() -> None:
         h = h - h.mean(axis=0, keepdims=True)
         h1, h2 = h[:, 0], h[:, 1]
 
-        # Physical coordinates of the two-interface slab:
-        # H : center/translation mode, W : thickness/breathing mode.
         H = 0.5 * (h1 + h2)
         W = h2 - h1
 
