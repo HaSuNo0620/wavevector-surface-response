@@ -7,6 +7,7 @@ on:
       - "src/wvsr/**"
       - "scripts/run_mc.py"
       - "scripts/analyze_modes.py"
+      - "scripts/analyze_capillary_coordinates.py"
       - "scripts/plot_mode_summary.py"
       - ".github/workflows/pilot-fullbox.yml"
   workflow_dispatch:
@@ -30,6 +31,9 @@ jobs:
       - name: Analyze all q modes
         run: |
           python scripts/analyze_modes.py results/raw/pilot_fullbox.npz --output-dir results/processed/pilot_modes --n-modes 16
+      - name: Analyze capillary coordinates
+        run: |
+          python scripts/analyze_capillary_coordinates.py results/raw/pilot_fullbox.npz --output-dir results/processed/capillary_coordinates
       - name: Make diagnostic figures
         run: |
           python scripts/plot_mode_summary.py results/processed/pilot_modes/mode_summary.csv --output-dir results/figures/pilot
@@ -57,7 +61,16 @@ jobs:
               assert float(r['capture_m8']) <= float(r['capture_m16']) + 1e-12
               assert float(r['interface_z_1']) < float(r['interface_z_2'])
               assert abs(float(r['closure_error'])) < 1e-8 * max(1.0, abs(float(r['var_total'])))
-          print('principal-angle pilot output validation passed')
+
+          c = Path('results/processed/capillary_coordinates/capillary_coordinate_summary.csv')
+          crows = list(csv.DictReader(c.open()))
+          assert len(crows) == 12, len(crows)
+          for r in crows:
+              for key in ['qx','var_h_plus','var_h_minus','q2_var_h_plus','q2_var_h_minus','corr_h1_h2_re']:
+                  assert math.isfinite(float(r[key])), (key, r[key])
+              assert float(r['var_h_plus']) >= 0.0
+              assert float(r['var_h_minus']) >= 0.0
+          print('principal-angle and capillary-coordinate outputs validated')
           PY
       - name: Upload pilot results
         uses: actions/upload-artifact@v4
@@ -66,5 +79,6 @@ jobs:
           path: |
             results/raw/pilot_fullbox.npz
             results/processed/pilot_modes/**
+            results/processed/capillary_coordinates/**
             results/figures/pilot/**
           retention-days: 30
