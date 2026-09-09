@@ -8,6 +8,7 @@ on:
       - "scripts/run_mc.py"
       - "scripts/analyze_modes.py"
       - "scripts/analyze_capillary_coordinates.py"
+      - "scripts/fit_capillary_massive_model.py"
       - "scripts/plot_mode_summary.py"
       - ".github/workflows/pilot-fullbox.yml"
   workflow_dispatch:
@@ -34,6 +35,9 @@ jobs:
       - name: Analyze capillary coordinates
         run: |
           python scripts/analyze_capillary_coordinates.py results/raw/pilot_fullbox.npz --output-dir results/processed/capillary_coordinates
+      - name: Fit massless/massive capillary models
+        run: |
+          python scripts/fit_capillary_massive_model.py results/processed/capillary_coordinates/capillary_coordinate_summary.csv --output-dir results/processed/capillary_fit --nfit 4
       - name: Make diagnostic figures
         run: |
           python scripts/plot_mode_summary.py results/processed/pilot_modes/mode_summary.csv --output-dir results/figures/pilot
@@ -70,7 +74,14 @@ jobs:
                   assert math.isfinite(float(r[key])), (key, r[key])
               assert float(r['var_h_plus']) >= 0.0
               assert float(r['var_h_minus']) >= 0.0
-          print('principal-angle and capillary-coordinate outputs validated')
+
+          f = Path('results/processed/capillary_fit/massive_model_comparison.csv')
+          frows = list(csv.DictReader(f.open()))
+          assert len(frows) == 2, len(frows)
+          for r in frows:
+              for key in ['aicc_const','aicc_massless','aicc_massive','massive_xi2','inverse_beta']:
+                  assert math.isfinite(float(r[key])), (key, r[key])
+          print('principal-angle, capillary-coordinate and model-fit outputs validated')
           PY
       - name: Upload pilot results
         uses: actions/upload-artifact@v4
@@ -80,5 +91,6 @@ jobs:
             results/raw/pilot_fullbox.npz
             results/processed/pilot_modes/**
             results/processed/capillary_coordinates/**
+            results/processed/capillary_fit/**
             results/figures/pilot/**
           retention-days: 30
