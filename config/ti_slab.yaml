@@ -1,0 +1,27 @@
+simulation:
+  seed: 20260920
+  temperature: 1.0
+  box: [16.0, 16.0, 48.0]
+  n_particles: 4800
+  cutoff: 2.5
+  neighbor_skin: 0.5
+  max_displacement: 0.12
+  equilibration_sweeps: 600
+  production_sweeps: 1200
+  sample_every: 5
+  z_bins: 192
+  two_interfaces: true
+
+initialization:
+  mode: slab
+  liquid_density: 0.7876
+  liquid_fraction_z: 0.52
+  min_separation: 0.85
+
+wavevectors:
+  n_x: [1, 4, 12, 16, 18]
+
+notes:
+  stage: "finite-A thermodynamic-integration pilot"
+  purpose: "measure d gamma / dA from the induced density mode and integrate to Delta gamma(A,q); FDT is a cross-check"
+  caveat: "short pilot; final values require longer runs, replicas, and validated coexistence references"
