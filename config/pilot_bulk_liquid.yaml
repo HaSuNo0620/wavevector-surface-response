@@ -1,0 +1,27 @@
+simulation:
+  seed: 20260910
+  temperature: 1.0
+  box: [16.0, 16.0, 8.0]
+  n_particles: 1483
+  cutoff: 2.5
+  neighbor_skin: 0.5
+  max_displacement: 0.12
+  equilibration_sweeps: 1500
+  production_sweeps: 3000
+  sample_every: 10
+  z_bins: 32
+  two_interfaces: false
+
+initialization:
+  mode: uniform
+  liquid_density: 0.72412109375
+  liquid_fraction_z: 1.0
+  min_separation: 0.85
+
+wavevectors:
+  n_x: [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+
+notes:
+  stage: "pilot bulk-liquid reference for chi_gamma"
+  purpose: "estimate Var(X_q)/V at the liquid plateau density measured in the current slab pilot"
+  caveat: "pilot-only density matched to the current slab profile, not a validated publication coexistence density"
