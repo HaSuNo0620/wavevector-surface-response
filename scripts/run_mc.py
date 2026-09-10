@@ -21,6 +21,8 @@ def main() -> None:
     p.add_argument("--field-amplitude", type=float, default=0.0)
     p.add_argument("--field-nx", type=int, default=0, help="integer Fourier index for optional parallel field")
     p.add_argument("--field-nz", type=int, default=0, help="integer Fourier index for optional normal field")
+    p.add_argument("--observe-nx", type=int, nargs="*", default=None,
+                   help="optional extra integer parallel Fourier indices to save in rho_q; merged with config n_x")
     p.add_argument("--seed", type=int, default=None, help="optional RNG seed override (useful for replicas)")
     args = p.parse_args()
 
@@ -45,6 +47,11 @@ def main() -> None:
 
     lx, _, lz = cfg.box
     nx = np.asarray(wv["n_x"], dtype=int)
+    extras = [] if args.observe_nx is None else list(args.observe_nx)
+    if args.field_nx != 0:
+        extras.append(int(args.field_nx))
+    if extras:
+        nx = np.unique(np.concatenate([nx, np.asarray(extras, dtype=int)]))
     qx = 2.0 * np.pi * nx / lx
 
     field = ExternalField(
@@ -68,6 +75,7 @@ def main() -> None:
     print(f"acceptance_rate: {result['acceptance_rate']:.4f}")
     print(f"final_max_displacement: {result['final_max_displacement']:.5f}")
     print(f"seed: {cfg.seed}")
+    print("nx observed:", nx)
     print("qx:", qx)
 
 
