@@ -1,0 +1,207 @@
+name: ti-constant-recovery
+
+on:
+  push:
+    paths:
+      - ".github/workflows/ti-constant-recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 9
+      matrix:
+        phase: [slab, liquid, vapor]
+        replica: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Build config with all tested q modes
+        id: cfg
+        shell: bash
+        run: |
+          case "${{ matrix.phase }}" in
+            slab)   SRC=config/ti_slab.yaml; POFF=100000 ;;
+            liquid) SRC=config/ti_bulk_liquid.yaml; POFF=200000 ;;
+            vapor)  SRC=config/ti_bulk_vapor.yaml; POFF=300000 ;;
+          esac
+          DST="${RUNNER_TEMP}/ti_${{ matrix.phase }}.yaml"
+          cp "$SRC" "$DST"
+          python - "$DST" <<'PY'
+          import sys, yaml
+          p = sys.argv[1]
+          with open(p) as f: d = yaml.safe_load(f)
+          d['wavevectors']['n_x'] = sorted(set(d['wavevectors']['n_x']) | {8, 14})
+          with open(p, 'w') as f: yaml.safe_dump(d, f, sort_keys=False)
+          PY
+          SEED=$((20260910 + POFF + 1000*${{ matrix.replica }}))
+          echo "path=$DST" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Reproduce baseline with missing q observables enabled
+        run: |
+          python scripts/run_mc.py \
+            --config "${{ steps.cfg.outputs.path }}" \
+            --output "results/raw/const_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz" \
+            --seed "${{ steps.cfg.outputs.seed }}"
+      - name: Upload recovered baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-baseline-${{ matrix.phase }}-rep${{ matrix.replica }}
+          path: results/raw/const_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  missing_scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 24
+      matrix:
+        phase: [slab, liquid, vapor]
+        nx: [8, 14]
+        amplitude: ["0.02", "0.04", "0.08"]
+        sign: ["p", "m"]
+        replica: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Build config, amplitude, and original seed
+        id: cfg
+        shell: bash
+        run: |
+          case "${{ matrix.phase }}" in
+            slab)   SRC=config/ti_slab.yaml; POFF=100000 ;;
+            liquid) SRC=config/ti_bulk_liquid.yaml; POFF=200000 ;;
+            vapor)  SRC=config/ti_bulk_vapor.yaml; POFF=300000 ;;
+          esac
+          DST="${RUNNER_TEMP}/ti_${{ matrix.phase }}.yaml"
+          cp "$SRC" "$DST"
+          python - "$DST" <<'PY'
+          import sys, yaml
+          p = sys.argv[1]
+          with open(p) as f: d = yaml.safe_load(f)
+          d['wavevectors']['n_x'] = sorted(set(d['wavevectors']['n_x']) | {8, 14})
+          with open(p, 'w') as f: yaml.safe_dump(d, f, sort_keys=False)
+          PY
+          if [ "${{ matrix.sign }}" = "m" ]; then AMP="-${{ matrix.amplitude }}"; SOFF=500; else AMP="${{ matrix.amplitude }}"; SOFF=0; fi
+          case "${{ matrix.amplitude }}" in
+            "0.02") AOFF=20 ;;
+            "0.04") AOFF=40 ;;
+            "0.08") AOFF=80 ;;
+          esac
+          SEED=$((20260910 + POFF + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          echo "path=$DST" >> "$GITHUB_OUTPUT"
+          echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Reproduce only missing q scan with target observable enabled
+        shell: bash
+        run: |
+          TAG=$(echo "${{ matrix.amplitude }}" | sed 's/\./p/g')
+          OUT="results/raw/const_${{ matrix.phase }}_nx${{ matrix.nx }}_${{ matrix.sign }}A${TAG}_rep${{ matrix.replica }}.npz"
+          python scripts/run_mc.py \
+            --config "${{ steps.cfg.outputs.path }}" \
+            --output "$OUT" \
+            --field-amplitude "${{ steps.cfg.outputs.amplitude }}" \
+            --field-nx "${{ matrix.nx }}" \
+            --seed "${{ steps.cfg.outputs.seed }}"
+      - name: Upload recovered missing scan
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-scan-${{ matrix.phase }}-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/const_${{ matrix.phase }}_nx${{ matrix.nx }}_${{ matrix.sign }}A*_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  analyze:
+    needs: [baseline, missing_scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Download valid q=1 scans from previous run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: HaSuNo0620/wavevector-surface-response
+          run-id: 34430175554
+          pattern: const-scan-*-nx1-*
+          path: results/old_inputs
+          merge-multiple: true
+      - name: Download valid q=16 scans from previous run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: HaSuNo0620/wavevector-surface-response
+          run-id: 34430175554
+          pattern: const-scan-*-nx16-*
+          path: results/old_inputs
+          merge-multiple: true
+      - name: Download valid q=18 scans from previous run
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: HaSuNo0620/wavevector-surface-response
+          run-id: 34430175554
+          pattern: const-scan-*-nx18-*
+          path: results/old_inputs
+          merge-multiple: true
+      - name: Download recovered baselines and missing scans
+        uses: actions/download-artifact@v4
+        with:
+          pattern: recovery-*
+          path: results/recovery_inputs
+          merge-multiple: true
+      - name: Assemble complete five-q dataset
+        run: |
+          mkdir -p results/constant_inputs
+          cp -f results/old_inputs/*.npz results/constant_inputs/
+          cp -f results/recovery_inputs/*.npz results/constant_inputs/
+          echo "NPZ count: $(find results/constant_inputs -name '*.npz' | wc -l)"
+      - name: Analyze constant susceptibility hypothesis
+        run: |
+          python scripts/analyze_constant_chi_scan.py \
+            results/constant_inputs \
+            --output-dir results/processed/ti_constant_test
+      - name: Validate outputs
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          s = pd.read_csv('results/processed/ti_constant_test/constant_chi_summary.csv')
+          q = pd.read_csv('results/processed/ti_constant_test/q_extrapolated_chi.csv')
+          assert len(q) == 5, len(q)
+          assert q[['qx','chi_extrap','se_chi_extrap','chi_fdt']].notna().all().all()
+          assert s[['constant_chi0','se_constant_chi0','chi2_constant_q']].notna().all().all()
+          print(s.to_string(index=False))
+          print(q.to_string(index=False))
+          PY
+      - name: Upload recovered constant-test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ti-constant-test-recovered-results
+          path: results/processed/ti_constant_test/**
+          retention-days: 30
