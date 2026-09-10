@@ -45,8 +45,7 @@ jobs:
           echo "seed=$SEED" >> "$GITHUB_OUTPUT"
       - name: Run baseline
         run: |
-          python scripts/run_mc.py \
-            --config "${{ steps.cfg.outputs.path }}" \
+          python scripts/run_mc.py --config "${{ steps.cfg.outputs.path }}" \
             --output "results/raw/const_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz" \
             --seed "${{ steps.cfg.outputs.seed }}"
       - name: Upload baseline
@@ -56,18 +55,56 @@ jobs:
           path: results/raw/const_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz
           retention-days: 30
 
-  scan:
+  scan_slab:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
       fail-fast: false
       max-parallel: 24
-      matrix:
-        phase: [slab, liquid, vapor]
+      matrix: &scan_matrix
         nx: [1, 8, 14, 16, 18]
         amplitude: ["0.02", "0.04", "0.08"]
         sign: ["p", "m"]
         replica: [1, 2, 3]
+    steps: &scan_steps_slab
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Select amplitude and seed
+        id: cfg
+        shell: bash
+        run: |
+          if [ "${{ matrix.sign }}" = "m" ]; then AMP="-${{ matrix.amplitude }}"; SOFF=500; else AMP="${{ matrix.amplitude }}"; SOFF=0; fi
+          case "${{ matrix.amplitude }}" in "0.02") AOFF=20 ;; "0.04") AOFF=40 ;; "0.08") AOFF=80 ;; esac
+          SEED=$((20260910 + 100000 + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run slab point
+        shell: bash
+        run: |
+          TAG=$(echo "${{ matrix.amplitude }}" | sed 's/\./p/g')
+          python scripts/run_mc.py --config config/ti_slab.yaml \
+            --output "results/raw/const_slab_nx${{ matrix.nx }}_${{ matrix.sign }}A${TAG}_rep${{ matrix.replica }}.npz" \
+            --field-amplitude "${{ steps.cfg.outputs.amplitude }}" --field-nx "${{ matrix.nx }}" --seed "${{ steps.cfg.outputs.seed }}"
+      - name: Upload slab point
+        uses: actions/upload-artifact@v4
+        with:
+          name: const-scan-slab-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/const_slab_nx${{ matrix.nx }}_${{ matrix.sign }}A*_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  scan_liquid:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 24
+      matrix: *scan_matrix
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -77,50 +114,70 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-      - name: Select config, amplitude, and seed
+      - name: Select amplitude and seed
         id: cfg
         shell: bash
         run: |
-          case "${{ matrix.phase }}" in
-            slab)   echo "path=config/ti_slab.yaml" >> "$GITHUB_OUTPUT"; POFF=100000 ;;
-            liquid) echo "path=config/ti_bulk_liquid.yaml" >> "$GITHUB_OUTPUT"; POFF=200000 ;;
-            vapor)  echo "path=config/ti_bulk_vapor.yaml" >> "$GITHUB_OUTPUT"; POFF=300000 ;;
-          esac
-          if [ "${{ matrix.sign }}" = "m" ]; then
-            AMP="-${{ matrix.amplitude }}"
-            SOFF=500
-          else
-            AMP="${{ matrix.amplitude }}"
-            SOFF=0
-          fi
-          case "${{ matrix.amplitude }}" in
-            "0.02") AOFF=20 ;;
-            "0.04") AOFF=40 ;;
-            "0.08") AOFF=80 ;;
-          esac
-          SEED=$((20260910 + POFF + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          if [ "${{ matrix.sign }}" = "m" ]; then AMP="-${{ matrix.amplitude }}"; SOFF=500; else AMP="${{ matrix.amplitude }}"; SOFF=0; fi
+          case "${{ matrix.amplitude }}" in "0.02") AOFF=20 ;; "0.04") AOFF=40 ;; "0.08") AOFF=80 ;; esac
+          SEED=$((20260910 + 200000 + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
           echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
           echo "seed=$SEED" >> "$GITHUB_OUTPUT"
-      - name: Run strong symmetric finite-A point
+      - name: Run liquid point
         shell: bash
         run: |
           TAG=$(echo "${{ matrix.amplitude }}" | sed 's/\./p/g')
-          OUT="results/raw/const_${{ matrix.phase }}_nx${{ matrix.nx }}_${{ matrix.sign }}A${TAG}_rep${{ matrix.replica }}.npz"
-          python scripts/run_mc.py \
-            --config "${{ steps.cfg.outputs.path }}" \
-            --output "$OUT" \
-            --field-amplitude "${{ steps.cfg.outputs.amplitude }}" \
-            --field-nx "${{ matrix.nx }}" \
-            --seed "${{ steps.cfg.outputs.seed }}"
-      - name: Upload scan point
+          python scripts/run_mc.py --config config/ti_bulk_liquid.yaml \
+            --output "results/raw/const_liquid_nx${{ matrix.nx }}_${{ matrix.sign }}A${TAG}_rep${{ matrix.replica }}.npz" \
+            --field-amplitude "${{ steps.cfg.outputs.amplitude }}" --field-nx "${{ matrix.nx }}" --seed "${{ steps.cfg.outputs.seed }}"
+      - name: Upload liquid point
         uses: actions/upload-artifact@v4
         with:
-          name: const-scan-${{ matrix.phase }}-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
-          path: results/raw/const_${{ matrix.phase }}_nx${{ matrix.nx }}_${{ matrix.sign }}A*_rep${{ matrix.replica }}.npz
+          name: const-scan-liquid-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/const_liquid_nx${{ matrix.nx }}_${{ matrix.sign }}A*_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  scan_vapor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 24
+      matrix: *scan_matrix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Select amplitude and seed
+        id: cfg
+        shell: bash
+        run: |
+          if [ "${{ matrix.sign }}" = "m" ]; then AMP="-${{ matrix.amplitude }}"; SOFF=500; else AMP="${{ matrix.amplitude }}"; SOFF=0; fi
+          case "${{ matrix.amplitude }}" in "0.02") AOFF=20 ;; "0.04") AOFF=40 ;; "0.08") AOFF=80 ;; esac
+          SEED=$((20260910 + 300000 + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run vapor point
+        shell: bash
+        run: |
+          TAG=$(echo "${{ matrix.amplitude }}" | sed 's/\./p/g')
+          python scripts/run_mc.py --config config/ti_bulk_vapor.yaml \
+            --output "results/raw/const_vapor_nx${{ matrix.nx }}_${{ matrix.sign }}A${TAG}_rep${{ matrix.replica }}.npz" \
+            --field-amplitude "${{ steps.cfg.outputs.amplitude }}" --field-nx "${{ matrix.nx }}" --seed "${{ steps.cfg.outputs.seed }}"
+      - name: Upload vapor point
+        uses: actions/upload-artifact@v4
+        with:
+          name: const-scan-vapor-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/const_vapor_nx${{ matrix.nx }}_${{ matrix.sign }}A*_rep${{ matrix.replica }}.npz
           retention-days: 30
 
   analyze:
-    needs: [baseline, scan]
+    needs: [baseline, scan_slab, scan_liquid, scan_vapor]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -140,9 +197,7 @@ jobs:
           merge-multiple: true
       - name: Analyze constant susceptibility hypothesis
         run: |
-          python scripts/analyze_constant_chi_scan.py \
-            results/constant_inputs \
-            --output-dir results/processed/ti_constant_test
+          python scripts/analyze_constant_chi_scan.py results/constant_inputs --output-dir results/processed/ti_constant_test
       - name: Validate outputs
         run: |
           python - <<'PY'
