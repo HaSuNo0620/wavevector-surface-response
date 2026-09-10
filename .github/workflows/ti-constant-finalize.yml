@@ -32,7 +32,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           python - <<'PY'
-          import io, json, os, re, urllib.request, zipfile
+          import io, json, os, re, subprocess, urllib.request, zipfile
           from pathlib import Path
 
           repo = os.environ['REPO']
@@ -72,24 +72,32 @@ jobs:
           selected = [a for a in old if old_pat.match(a['name'])] + [a for a in rec if rec_pat.match(a['name'])]
           print(f'selected artifacts: {len(selected)}')
 
-          expected_old = 3 * 3 * 6 * 3  # phase * nx * signed amplitudes * replica
+          expected_old = 3 * 3 * 6 * 3
           expected_rec = 3 * 3 + 3 * 2 * 6 * 3
-          if len([a for a in selected if a in old]) != expected_old:
-              raise RuntimeError(f'old selection count mismatch: expected {expected_old}, got {len([a for a in selected if a in old])}')
-          if len([a for a in selected if a in rec]) != expected_rec:
-              raise RuntimeError(f'recovery selection count mismatch: expected {expected_rec}, got {len([a for a in selected if a in rec])}')
+          old_count = sum(1 for a in selected if a in old)
+          rec_count = sum(1 for a in selected if a in rec)
+          if old_count != expected_old:
+              raise RuntimeError(f'old selection count mismatch: expected {expected_old}, got {old_count}')
+          if rec_count != expected_rec:
+              raise RuntimeError(f'recovery selection count mismatch: expected {expected_rec}, got {rec_count}')
 
+          tmp = Path('results/artifact_tmp.zip')
           for k, a in enumerate(selected, 1):
-              req = urllib.request.Request(a['archive_download_url'], headers=headers)
-              with urllib.request.urlopen(req) as r:
-                  payload = r.read()
-              with zipfile.ZipFile(io.BytesIO(payload)) as zf:
+              subprocess.run([
+                  'curl', '-L', '-f', '-sS',
+                  '-H', f'Authorization: Bearer {token}',
+                  '-H', 'Accept: application/vnd.github+json',
+                  a['archive_download_url'],
+                  '-o', str(tmp),
+              ], check=True)
+              with zipfile.ZipFile(tmp) as zf:
                   for member in zf.namelist():
                       if member.endswith('.npz'):
                           target = out / Path(member).name
                           target.write_bytes(zf.read(member))
               if k % 25 == 0 or k == len(selected):
                   print(f'downloaded {k}/{len(selected)}')
+          tmp.unlink(missing_ok=True)
 
           npz = list(out.glob('*.npz'))
           print(f'NPZ count after extraction: {len(npz)}')
