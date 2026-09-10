@@ -1,0 +1,216 @@
+name: ti-linearity-window
+
+on:
+  push:
+    paths:
+      - '.github/workflows/ti-linearity-window.yml'
+  workflow_dispatch:
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 15
+      matrix:
+        phase: [slab, liquid, vapor]
+        replica: [1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Select config and seed
+        id: cfg
+        shell: bash
+        run: |
+          case '${{ matrix.phase }}' in
+            slab)   echo 'path=config/ti_slab.yaml' >> "$GITHUB_OUTPUT"; POFF=100000 ;;
+            liquid) echo 'path=config/ti_bulk_liquid.yaml' >> "$GITHUB_OUTPUT"; POFF=200000 ;;
+            vapor)  echo 'path=config/ti_bulk_vapor.yaml' >> "$GITHUB_OUTPUT"; POFF=300000 ;;
+          esac
+          SEED=$((20260920 + POFF + 1000*${{ matrix.replica }}))
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run baseline
+        run: |
+          python scripts/run_mc.py --config '${{ steps.cfg.outputs.path }}' \
+            --output 'results/raw/linwin_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz' \
+            --observe-nx 1 8 16 --seed '${{ steps.cfg.outputs.seed }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linwin-baseline-${{ matrix.phase }}-rep${{ matrix.replica }}
+          path: results/raw/linwin_baseline_${{ matrix.phase }}_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  scan_slab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 24
+      matrix: &scan_matrix
+        nx: [1, 8, 16]
+        amplitude: ['0.015', '0.025', '0.035', '0.05']
+        sign: [p, m]
+        replica: [1, 2, 3, 4, 5]
+    steps: &common_slab
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Set amplitude and seed
+        id: cfg
+        shell: bash
+        run: |
+          if [ '${{ matrix.sign }}' = 'm' ]; then AMP='-${{ matrix.amplitude }}'; SOFF=500; else AMP='${{ matrix.amplitude }}'; SOFF=0; fi
+          AOFF=$(python - <<'PY'
+          print(int(round(float('${{ matrix.amplitude }}')*1000)))
+          PY
+          )
+          SEED=$((20260920 + 100000 + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run slab point
+        shell: bash
+        run: |
+          TAG=$(echo '${{ matrix.amplitude }}' | sed 's/\./p/g')
+          python scripts/run_mc.py --config config/ti_slab.yaml \
+            --output 'results/raw/linwin_slab_nx${{ matrix.nx }}_${{ matrix.sign }}A'${TAG}'_rep${{ matrix.replica }}.npz' \
+            --field-amplitude '${{ steps.cfg.outputs.amplitude }}' --field-nx '${{ matrix.nx }}' \
+            --observe-nx 1 8 16 --seed '${{ steps.cfg.outputs.seed }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linwin-scan-slab-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/linwin_slab_nx${{ matrix.nx }}_*_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  scan_liquid:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 24
+      matrix: *scan_matrix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Set amplitude and seed
+        id: cfg
+        shell: bash
+        run: |
+          if [ '${{ matrix.sign }}' = 'm' ]; then AMP='-${{ matrix.amplitude }}'; SOFF=500; else AMP='${{ matrix.amplitude }}'; SOFF=0; fi
+          AOFF=$(python - <<'PY'
+          print(int(round(float('${{ matrix.amplitude }}')*1000)))
+          PY
+          )
+          SEED=$((20260920 + 200000 + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run liquid point
+        shell: bash
+        run: |
+          TAG=$(echo '${{ matrix.amplitude }}' | sed 's/\./p/g')
+          python scripts/run_mc.py --config config/ti_bulk_liquid.yaml \
+            --output 'results/raw/linwin_liquid_nx${{ matrix.nx }}_${{ matrix.sign }}A'${TAG}'_rep${{ matrix.replica }}.npz' \
+            --field-amplitude '${{ steps.cfg.outputs.amplitude }}' --field-nx '${{ matrix.nx }}' \
+            --observe-nx 1 8 16 --seed '${{ steps.cfg.outputs.seed }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linwin-scan-liquid-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/linwin_liquid_nx${{ matrix.nx }}_*_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  scan_vapor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 24
+      matrix: *scan_matrix
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Set amplitude and seed
+        id: cfg
+        shell: bash
+        run: |
+          if [ '${{ matrix.sign }}' = 'm' ]; then AMP='-${{ matrix.amplitude }}'; SOFF=500; else AMP='${{ matrix.amplitude }}'; SOFF=0; fi
+          AOFF=$(python - <<'PY'
+          print(int(round(float('${{ matrix.amplitude }}')*1000)))
+          PY
+          )
+          SEED=$((20260920 + 300000 + 1000*${{ matrix.replica }} + 10*${{ matrix.nx }} + SOFF + AOFF))
+          echo "amplitude=$AMP" >> "$GITHUB_OUTPUT"
+          echo "seed=$SEED" >> "$GITHUB_OUTPUT"
+      - name: Run vapor point
+        shell: bash
+        run: |
+          TAG=$(echo '${{ matrix.amplitude }}' | sed 's/\./p/g')
+          python scripts/run_mc.py --config config/ti_bulk_vapor.yaml \
+            --output 'results/raw/linwin_vapor_nx${{ matrix.nx }}_${{ matrix.sign }}A'${TAG}'_rep${{ matrix.replica }}.npz' \
+            --field-amplitude '${{ steps.cfg.outputs.amplitude }}' --field-nx '${{ matrix.nx }}' \
+            --observe-nx 1 8 16 --seed '${{ steps.cfg.outputs.seed }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linwin-scan-vapor-nx${{ matrix.nx }}-${{ matrix.sign }}A${{ matrix.amplitude }}-rep${{ matrix.replica }}
+          path: results/raw/linwin_vapor_nx${{ matrix.nx }}_*_rep${{ matrix.replica }}.npz
+          retention-days: 30
+
+  analyze:
+    needs: [baseline, scan_slab, scan_liquid, scan_vapor]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: linwin-*
+          path: results/linwin_inputs
+          merge-multiple: true
+      - name: Analyze
+        run: |
+          python scripts/analyze_constant_chi_scan.py results/linwin_inputs --output-dir results/processed/ti_linearity_window
+      - name: Validate
+        run: |
+          python - <<'PY'
+          import pandas as pd
+          p = pd.read_csv('results/processed/ti_linearity_window/ratio_points.csv')
+          q = pd.read_csv('results/processed/ti_linearity_window/q_extrapolated_chi.csv')
+          assert len(q) == 3, len(q)
+          assert set(p['n_replicas']) == {5}, set(p['n_replicas'])
+          assert q[['qx','chi_extrap','se_chi_extrap','c3','chi_fdt']].notna().all().all()
+          print(q.to_string(index=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ti-linearity-window-results
+          path: results/processed/ti_linearity_window/**
+          retention-days: 30
